@@ -1,0 +1,197 @@
+{
+ "14": {
+  "braun": 14,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "19": {
+  "braun": 19,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2",
+   "Z8",
+   "Q8"
+  ],
+  "ordres": [
+   4,
+   8
+  ]
+ },
+ "2564": {
+  "braun": 2564,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2",
+   "Z8",
+   "Q8"
+  ],
+  "ordres": [
+   4,
+   8
+  ]
+ },
+ "6826": {
+  "braun": 6826,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7240": {
+  "braun": 7240,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "7484": {
+  "braun": 7484,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7669": {
+  "braun": 7669,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "7714": {
+  "braun": 7714,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7735": {
+  "braun": 7735,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7745": {
+  "braun": 7745,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7761": {
+  "braun": 7761,
+  "groupes": [
+   "Z5",
+   "Z10"
+  ],
+  "ordres": [
+   5,
+   10
+  ]
+ },
+ "7808": {
+  "braun": 7808,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "7819": {
+  "braun": 7819,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7823": {
+  "braun": 7823,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7861": {
+  "braun": 7861,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2",
+   "Z8",
+   "Q8",
+   "Z2 x Z2 x Z2",
+   "Z4 x Z4",
+   "Z4 rx Z4",
+   "Z8 x Z2",
+   "Z4 x Z2 x Z2",
+   "Z2 x Q8",
+   "Z8 x Z4",
+   "Z8 rx Z4",
+   "Z4 x Z4 x Z2",
+   "Z4 rx Q8",
+   "Z2 x Z2 x Q8"
+  ],
+  "ordres": [
+   4,
+   8,
+   16,
+   32
+  ]
+ },
+ "7878": {
+  "braun": 7878,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "7884": {
+  "braun": 7884,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "7890": {
+  "braun": 7890,
+  "groupes": [
+   "Z5",
+   "Z5 x Z5"
+  ],
+  "ordres": [
+   5,
+   25
+  ]
+ }
+}

@@ -1,0 +1,2 @@
+@echo off
+call C:\Users\Franck\miniconda3\Scripts\activate.bat C:\Users\Franck\miniconda3 && cd /d "C:\Users\Franck\Desktop\Vide Poche\CY_Landscape" && conda activate gpu_env && python -m audit_results output_optimized --top 20

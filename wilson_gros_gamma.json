@@ -1,0 +1,606 @@
+{
+ "6": {
+  "braun": 6,
+  "groupes": [
+   "Z6"
+  ],
+  "ordres": [
+   6
+  ]
+ },
+ "14": {
+  "braun": 14,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "15": {
+  "braun": 15,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "19": {
+  "braun": 19,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2",
+   "Z8",
+   "Q8"
+  ],
+  "ordres": [
+   4,
+   8
+  ]
+ },
+ "20": {
+  "braun": 20,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "21": {
+  "braun": 21,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2",
+   "Z8",
+   "Q8",
+   "Z4 x Z4",
+   "Z4 rx Z4",
+   "Z8 x Z2",
+   "Z8 rx Z2",
+   "Z2 x Q8"
+  ],
+  "ordres": [
+   4,
+   8,
+   16
+  ]
+ },
+ "22": {
+  "braun": 22,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "30": {
+  "braun": 30,
+  "groupes": [
+   "Z4"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "480": {
+  "braun": 480,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "2317": {
+  "braun": 4335,
+  "groupes": [
+   "Z5",
+   "Z10"
+  ],
+  "ordres": [
+   5,
+   10
+  ]
+ },
+ "2357": {
+  "braun": 2357,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "2534": {
+  "braun": 2534,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "2564": {
+  "braun": 2564,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2",
+   "Z8",
+   "Q8"
+  ],
+  "ordres": [
+   4,
+   8
+  ]
+ },
+ "2566": {
+  "braun": 2566,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "2568": {
+  "braun": 2568,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "2572": {
+  "braun": 2572,
+  "groupes": [
+   "Z4"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "2639": {
+  "braun": 2639,
+  "groupes": [
+   "Z4"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "2640": {
+  "braun": 2640,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "5256": {
+  "braun": 5256,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "5301": {
+  "braun": 5301,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "5302": {
+  "braun": 5302,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "5421": {
+  "braun": 5421,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "5452": {
+  "braun": 5452,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "6655": {
+  "braun": 6655,
+  "groupes": [
+   "Z5"
+  ],
+  "ordres": [
+   5
+  ]
+ },
+ "6715": {
+  "braun": 6715,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "6784": {
+  "braun": 6784,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "6788": {
+  "braun": 6788,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "6826": {
+  "braun": 6826,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "6828": {
+  "braun": 6828,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "6829": {
+  "braun": 6829,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "6836": {
+  "braun": 6836,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2",
+   "Z8",
+   "Q8",
+   "Z4 rx Z4",
+   "Z8 x Z2"
+  ],
+  "ordres": [
+   4,
+   8,
+   16
+  ]
+ },
+ "6927": {
+  "braun": 6927,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "6947": {
+  "braun": 6947,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2",
+   "Z8",
+   "Q8",
+   "Z4 rx Z4",
+   "Z8 x Z2"
+  ],
+  "ordres": [
+   4,
+   8,
+   16
+  ]
+ },
+ "7206": {
+  "braun": 7206,
+  "groupes": [
+   "Z6"
+  ],
+  "ordres": [
+   6
+  ]
+ },
+ "7240": {
+  "braun": 7240,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "7246": {
+  "braun": 7246,
+  "groupes": [
+   "Z4",
+   "Z6",
+   "Z3 rx Z4",
+   "Z12"
+  ],
+  "ordres": [
+   4,
+   6,
+   12
+  ]
+ },
+ "7300": {
+  "braun": 7300,
+  "groupes": [
+   "Z4",
+   "Z6",
+   "Z3 rx Z4",
+   "Z12"
+  ],
+  "ordres": [
+   4,
+   6,
+   12
+  ]
+ },
+ "7435": {
+  "braun": 7435,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7447": {
+  "braun": 7447,
+  "groupes": [
+   "Z2 x Z2",
+   "Z5",
+   "Z10",
+   "Z10 x Z2"
+  ],
+  "ordres": [
+   4,
+   5,
+   10,
+   20
+  ]
+ },
+ "7462": {
+  "braun": 7462,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7484": {
+  "braun": 7484,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7487": {
+  "braun": 7487,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7491": {
+  "braun": 7491,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7522": {
+  "braun": 7522,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7669": {
+  "braun": 7669,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "7714": {
+  "braun": 7714,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7735": {
+  "braun": 7735,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7745": {
+  "braun": 7745,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7761": {
+  "braun": 7761,
+  "groupes": [
+   "Z5",
+   "Z10"
+  ],
+  "ordres": [
+   5,
+   10
+  ]
+ },
+ "7808": {
+  "braun": 7808,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "7819": {
+  "braun": 7819,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7823": {
+  "braun": 7823,
+  "groupes": [
+   "Z2 x Z2"
+  ],
+  "ordres": [
+   4
+  ]
+ },
+ "7861": {
+  "braun": 7861,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2",
+   "Z8",
+   "Q8",
+   "Z2 x Z2 x Z2",
+   "Z4 x Z4",
+   "Z4 rx Z4",
+   "Z8 x Z2",
+   "Z4 x Z2 x Z2",
+   "Z2 x Q8",
+   "Z8 x Z4",
+   "Z8 rx Z4",
+   "Z4 x Z4 x Z2",
+   "Z4 rx Q8",
+   "Z2 x Z2 x Q8"
+  ],
+  "ordres": [
+   4,
+   8,
+   16,
+   32
+  ]
+ },
+ "7862": {
+  "braun": 7862,
+  "groupes": [
+   "Z4",
+   "Z2 x Z2",
+   "Z8",
+   "Q8",
+   "Z4 x Z4",
+   "Z4 rx Z4",
+   "Z8 x Z2",
+   "Z8 rx Z2",
+   "Z2 x Q8"
+  ],
+  "ordres": [
+   4,
+   8,
+   16
+  ]
+ },
+ "7878": {
+  "braun": 7878,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "7884": {
+  "braun": 7884,
+  "groupes": [
+   "Z3 x Z3"
+  ],
+  "ordres": [
+   9
+  ]
+ },
+ "7890": {
+  "braun": 7890,
+  "groupes": [
+   "Z5",
+   "Z5 x Z5"
+  ],
+  "ordres": [
+   5,
+   25
+  ]
+ }
+}

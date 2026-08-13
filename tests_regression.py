@@ -1481,6 +1481,137 @@ def t_hoppe_suffisant():
 
 
 # ======================================================================
+# 11 decies. Phase des twists : elimine #7484, epargne #6890
+# ======================================================================
+
+@test("twists : #7484 elimine par H=(-2,0,1), #6890 epargne -- deux verdicts")
+def t_hoppe_twists():
+    """
+    `hoppe_fast` ne testait que H = 0 et H = e_i. Le polytope
+    deg_J(H) >= 0 contient des H a composantes de signes MELANGES, hors de
+    portee de `max_H` quel qu'il soit, et c'est la que se trouvait un faux
+    positif du catalogue.
+
+    ----------------------------------------------------------------------
+    Reference : un comptage de dimensions, pas une valeur du code
+    ----------------------------------------------------------------------
+    dim ker >= dim source - dim cible. Sur #7484 avec H = (-2, 0, 1) :
+
+        h0(O(b_i - H)) = 6 + 0 + 3 + 4 + 0 = 13     (tous certifies)
+        h0(O(c   - H)) = 12                         (certifie)
+
+    donc h0(V(-H)) >= 1, et deg_J(H) = 4 > 0 : O(H) est un sous-faisceau de
+    pente strictement positive dans un fibre de pente nulle. #7484 n'est
+    PAS stable, alors qu'il figure au catalogue `scan_wilson2` comme
+    Hoppe-stable. Le test fige les cinq h0 un par un : une derive de la
+    cohomologie de Koszul le ferait tomber avant le verdict.
+
+    ----------------------------------------------------------------------
+    Deux verdicts opposes
+    ----------------------------------------------------------------------
+    #6890, demontre stable au §5.14, ne doit PAS etre elimine. Un test qui
+    n'exigerait que l'elimination passerait pour une phase qui rejette
+    tout ; un test qui n'exigerait que la survie passerait pour une phase
+    qui n'elimine jamais. Les deux ensemble n'admettent qu'une phase qui
+    discrimine.
+
+    La CERTIFICATION est exigee : sans elle la borne porterait sur des h0
+    faux dans ~30 % des cas (§4.2) et l'elimination ne serait pas demontree.
+    """
+    from cy_landscape.core.hoppe_fast import (hoppe_twists, vecteur_D,
+                                              borne_h0_V_twist, hoppe_fast)
+    from cy_landscape.core.monads import MonadBundle
+    from cy_landscape.core.cache import set_geometry
+    from cy_landscape.core.intersection import compute_intersection_numbers
+    from cy_landscape.core.exact_cohomology import koszul_cohomology_ex
+    from cy_landscape.data.parse_oxford import load_oxford_file
+
+    entries = {e['num']: e for e in load_oxford_file('cicylist.txt')}
+
+    # --- le cas qui doit tomber, avec ses h0 figes un par un -------------
+    e = entries[7484]
+    amb, cfg = e['ambient'], e['config']
+    m = len(amb)
+    set_geometry(amb, cfg)
+    B = [[0, 1, 1], [1, 0, -1], [0, 0, 1], [1, 0, 1], [1, 0, -1]]
+    C = [[3, 1, 1]]
+    H = [-2, 0, 1]
+    assert [sum(x[k] for x in B) for k in range(m)] == C[0], "c1(V) != 0"
+    D = [int(x) for x in vecteur_D(compute_intersection_numbers(amb, cfg),
+                                   [1] * m)]
+    assert sum(H[k] * D[k] for k in range(m)) > 0, (H, D, "deg_J(H) <= 0")
+
+    attendus = [6, 0, 3, 4, 0]
+    src = 0
+    for bb, att in zip(B, attendus):
+        r = koszul_cohomology_ex(amb, cfg, [bb[k] - H[k] for k in range(m)])
+        assert r['certified_by_degree'][0], (bb, "h0 non certifie")
+        assert r[0] == att, (bb, r[0], att)
+        src += r[0]
+    rc = koszul_cohomology_ex(amb, cfg, [C[0][k] - H[k] for k in range(m)])
+    assert rc['certified_by_degree'][0] and rc[0] == 12, rc[0]
+    assert src == 13 and src - rc[0] == 1, (src, rc[0])
+
+    mo = MonadBundle(B, C)
+    borne, cert = borne_h0_V_twist(amb, cfg, mo, H)
+    assert cert and borne == 1, (borne, cert)
+    tw = hoppe_twists(amb, cfg, mo, D)
+    assert tw['instable'] is True, tw
+    assert tw['temoin'] == H, (tw['temoin'], H)
+    # et hoppe_fast doit relayer le verdict quand on lui donne D
+    hf = hoppe_fast(amb, cfg, mo, max_H=1, D=D)
+    assert hf['stable'] is False, hf
+    # ... alors qu'il le laissait passer sans D : c'est la mesure du gain
+    hf0 = hoppe_fast(amb, cfg, mo, max_H=1)
+    assert hf0['stable'] is not False, (
+        "#7484 est deja elimine sans la phase des twists : le cas de test "
+        "ne mesure plus rien", hf0)
+
+    # --- le cas qui doit survivre ---------------------------------------
+    e2 = entries[6890]
+    amb2, cfg2 = e2['ambient'], e2['config']
+    set_geometry(amb2, cfg2)
+    B2 = [[0, 1, 0, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0], [0, 0, 0, 1, 0]]
+    C2 = [[0, 1, 3, 1, 0]]
+    D2 = [int(x) for x in vecteur_D(compute_intersection_numbers(amb2, cfg2),
+                                    [1] * len(amb2))]
+    tw2 = hoppe_twists(amb2, cfg2, MonadBundle(B2, C2), D2)
+    assert tw2['instable'] is not True, (
+        "#6890 elimine par la phase des twists, alors qu'il est demontre "
+        "stable au §5.14 : la phase rejette trop", tw2)
+    assert tw2['n_twists'] >= 10, tw2
+
+    # --- la certification doit bloquer la conclusion --------------------
+    # Sur #21, 5 twists sur 45 ont un h0 non certifie. Le verdict doit
+    # etre None, PAS False : « aucun twist destabilisant trouve » et
+    # « aucun twist destabilisant sur des nombres verifies » sont deux
+    # enonces differents, et le second seul vaut quelque chose. Sans le
+    # suivi de la certification, cette entree passerait pour un blanc-seing.
+    e3 = entries[21]
+    amb3, cfg3 = e3['ambient'], e3['config']
+    set_geometry(amb3, cfg3)
+    B3 = [[0, 0, 2, 1, 0], [0, 0, 0, 0, 1], [0, 0, 0, 1, 0],
+          [0, 0, 1, 1, 0], [0, 0, 1, 0, 0], [0, 0, 0, 0, 1]]
+    C3 = [[0, 0, 4, 3, 2]]
+    D3 = [int(x) for x in vecteur_D(compute_intersection_numbers(amb3, cfg3),
+                                    [1] * len(amb3))]
+    tw3 = hoppe_twists(amb3, cfg3, MonadBundle(B3, C3), D3)
+    assert tw3['non_certifies'] > 0, (
+        "#21 n'a plus de twist non certifie : le cas de test ne mesure "
+        "plus la garde de certification", tw3)
+    assert tw3['instable'] is None, (
+        "des twists non certifies et pourtant un verdict tranche : la "
+        "borne porterait sur des h0 faux dans ~30 % des cas (§4.2)", tw3)
+
+    return (f"#7484 : source {src} > cible {rc[0]} a H = {H} (deg_J = "
+            f"{sum(H[k]*D[k] for k in range(m))}), tous h0 certifies -> "
+            f"elimine ; #6890 : {tw2['n_twists']} twists, aucun "
+            f"destabilisant -> epargne ; #21 : {tw3['non_certifies']}/"
+            f"{tw3['n_twists']} non certifies -> aucun verdict")
+
+
+# ======================================================================
 # 12. Ordre projectif et racines n-iemes
 # ======================================================================
 

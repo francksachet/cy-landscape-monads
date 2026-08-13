@@ -598,6 +598,51 @@ def h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, p_ext, base, offsets,
     return meilleur, dsrc
 
 
+def hoppe_suffisant_generique(ambient, config, b_charges, c_charges, D,
+                              seed=2, rng_seed=5, maxdim=6000,
+                              plafond_twists=200000):
+    """
+    Critere de Hoppe suffisant pour un f GENERIQUE de l'anneau, sans
+    contrainte d'equivariance. Monte l'anneau et la base pleine, puis
+    delegue a `hoppe_suffisant_sur_espace`.
+
+    Portee de l'enonce : `stable = True` signifie que le membre GENERIQUE
+    de la famille de monades est un fibre mu_J-stable. Il ne dit rien d'un
+    f particulier -- notamment pas d'un f equivariant, h^0 etant
+    semi-continu superieurement : la valeur ne peut que MONTER en un point
+    special. Pour un candidat porteur d'une structure equivariante, c'est
+    `hoppe_suffisant_sur_espace` avec la base contrainte qui fait foi
+    (§5.14).
+
+    Renvoie None si la monade est hors du domaine du modele S/I, ou si
+    rank_C != 1 -- dans les deux cas on ne conclut pas.
+    """
+    from cy_landscape.core.sections import Ring, P, domaine_valide
+    if len(c_charges) != 1:
+        return None
+    if not domaine_valide(ambient, config, b_charges, c_charges):
+        return None
+    m = len(ambient)
+    degres = [[[c_charges[0][k] - b_charges[i][k] for k in range(m)]
+               for i in range(len(b_charges))]]
+    R = Ring(ambient, config, seed=seed)
+    cases = [(0, i) for i in range(len(b_charges))
+             if all(x >= 0 for x in degres[0][i])]
+    dims, offsets, a = {}, {}, 0
+    for k in cases:
+        dims[k] = R.dimY(degres[0][k[1]])
+        offsets[k] = a
+        a += dims[k]
+    if a == 0:
+        return None
+    base = np.eye(a, dtype=np.int64)
+    return hoppe_suffisant_sur_espace(R, b_charges, c_charges, base, offsets,
+                                      dims, degres, P,
+                                      np.random.RandomState(rng_seed), D,
+                                      maxdim=maxdim,
+                                      plafond_twists=plafond_twists)
+
+
 def hoppe_suffisant_sur_espace(anneau, b_charges, c_charges, base, offsets,
                                dims, degres, p, rng, D, maxdim=6000,
                                plafond_twists=200000):

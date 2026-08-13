@@ -104,12 +104,17 @@ def _wedge3_h0_twisted(ambient, config, monad, H):
     return max(0, hB[3] - rank_f3)
 
 
-def hoppe_fast(ambient, config, monad, max_H=1):
+def hoppe_fast(ambient, config, monad, max_H=1, D=None):
     """
     Critere de Hoppe avec sortie anticipee.
 
     Ordre des tests (du moins cher au plus cher) :
     0. H = 0  <-- L'ENONCE MEME DU CRITERE pour c1(V) = 0
+    0 bis. TWISTS : tout H du polytope deg_J(H) >= 0, si `D` est fourni.
+       C'est la phase qui voit les H a composantes de signes MELANGES,
+       hors de portee de `max_H` : sur le catalogue scan_wilson2 elle
+       elimine #7484 (rang 4 SO(10)) par H = (-2, 0, 1), la ou H = 0 et
+       H = e_i ne trouvent rien. `D = hoppe_fast.vecteur_D(d_ijk, J)`.
     1. Rang 1, H = e_i (generateurs)
     2. Rang 2, H = e_i
     3. Rang 3, H = e_i (si rk >= 4)
@@ -155,6 +160,18 @@ def hoppe_fast(ambient, config, monad, max_H=1):
     h0 = _monad_h0_twisted(ambient, config, monad, H0)
     if h0 > 0:
         return {"stable": False, "reason": f"H⁰(V) = {h0}", "tests": tests}
+
+    # ---- Phase 0 bis : le polytope des twists ---------------------------
+    # Purement ELIMINATOIRE : un h0(V(-H)) > 0 certifie avec deg_J(H) >= 0
+    # exhibe un sous-faisceau de pente >= mu(V) = 0. L'absence de twist
+    # destabilisant ne prouve rien -- le verdict `stable` de cette fonction
+    # reste « non elimine » (voir l'entete du module).
+    if D is not None:
+        tw = hoppe_twists(ambient, config, monad, D)
+        tests += tw['n_twists']
+        if tw['instable']:
+            return {"stable": False, "reason": tw['motif'], "tests": tests,
+                    "twist_temoin": tw['temoin']}
 
     # h3(V) : on utilise les BORNES rigoureuses, sans supposer la stabilite
     # (ce serait circulaire ici). Une borne INFERIEURE strictement positive
@@ -353,3 +370,72 @@ def polytope_twists(b_charges, p_ext, D, plafond=200000):
         if any(all(H[k] <= c[k] for k in range(m)) for c in ch):
             out.append(list(H))
     return out
+
+
+def borne_h0_V_twist(ambient, config, monad, H):
+    """
+    (borne_inferieure, certifie) pour h0(V(-H)), V = ker(B -> C).
+
+    dim ker >= dim source - dim cible : la borne est INCONDITIONNELLE, et
+    une valeur strictement positive PROUVE h0(V(-H)) > 0.
+
+    Chaque h0 de fibre en droites doit etre CERTIFIE par
+    `koszul_cohomology_ex` : sans cela la borne porterait sur des nombres
+    faux dans ~30 % des cas (§4.2), et une elimination « demontree » ne le
+    serait pas. `certifie = False` => l'appelant ne doit pas conclure.
+    """
+    from cy_landscape.core.exact_cohomology import koszul_cohomology_ex
+    m = len(H)
+    src = dst = 0
+    cert = True
+    for b in monad.b_charges:
+        r = koszul_cohomology_ex(ambient, config, [b[k] - H[k] for k in range(m)])
+        cert = cert and bool(r['certified_by_degree'][0])
+        src += r[0]
+    for c in monad.c_charges:
+        r = koszul_cohomology_ex(ambient, config, [c[k] - H[k] for k in range(m)])
+        cert = cert and bool(r['certified_by_degree'][0])
+        dst += r[0]
+    return max(0, src - dst), cert
+
+
+def hoppe_twists(ambient, config, monad, D, plafond=200000):
+    """
+    Phase des TWISTS : cherche un H de degre >= 0 destabilisant V, par la
+    seule borne de comptage. ELIMINATOIRE, jamais confirmatoire.
+
+    Un h0(V(-H)) > 0 avec deg_J(H) >= 0 fournit un sous-faisceau O(H) c V
+    de pente >= 0 = mu(V) : V n'est pas mu_J-stable. C'est ce que les
+    phases H = 0 et H = e_i de `hoppe_fast` ne voient pas -- le polytope
+    complet contient des H a composantes de signes MELANGES, hors de
+    portee de `max_H`.
+
+    Mesure sur le catalogue `scan_wilson2` : sur 77 entrees a rank_C = 1,
+    une (#7484, rang 4 SO(10)) est eliminee par H = (-2, 0, 1), de degre 4,
+    avec source 13 > cible 12 et tous les h0 certifies. Elle figurait comme
+    Hoppe-stable. Aucune n'est eliminee par H = 0 ni par H = e_i.
+
+    Renvoie {'instable': bool|None, 'temoin': H|None, 'n_twists': int,
+             'non_certifies': int}. `instable = None` signifie qu'on n'a
+    rien trouve mais que des twists n'ont pas pu etre certifies : on ne
+    conclut pas a la stabilite pour autant -- ce test ne la prouve jamais.
+    """
+    Hs = polytope_twists(monad.b_charges, 1, D, plafond=plafond)
+    if Hs is None:
+        return {'instable': None, 'temoin': None, 'n_twists': 0,
+                'non_certifies': 0, 'motif': 'polytope non borne ou hors plafond'}
+    n_nc = 0
+    for H in Hs:
+        borne, cert = borne_h0_V_twist(ambient, config, monad, H)
+        if not cert:
+            n_nc += 1
+            continue
+        if borne > 0:
+            return {'instable': True, 'temoin': list(H), 'n_twists': len(Hs),
+                    'non_certifies': n_nc,
+                    'motif': f'h0(V(-H)) >= {borne} avec H = {list(H)}, '
+                             f'deg_J(H) >= 0'}
+    return {'instable': (None if n_nc else False), 'temoin': None,
+            'n_twists': len(Hs), 'non_certifies': n_nc,
+            'motif': (f'{n_nc} twists non certifies sur {len(Hs)}' if n_nc
+                      else f'{len(Hs)} twists testes, aucun destabilisant')}

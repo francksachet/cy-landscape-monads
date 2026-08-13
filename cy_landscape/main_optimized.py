@@ -49,7 +49,7 @@ def process_cicy(args):
         hoppe_extension, cohomology_extension_ex, generate_extensions,
         pente_extension, ContextePente)
     from cy_landscape.core.cache import set_geometry
-    from cy_landscape.core.hoppe_fast import hoppe_fast
+    from cy_landscape.core.hoppe_fast import hoppe_fast, vecteur_D
     from cy_landscape.core.monad_wedge import cohomology_wedge2_V
     from cy_landscape.core.cohomology import (
         extract_spectrum_su5, extract_spectrum_so10, extract_spectrum_e6)
@@ -95,6 +95,7 @@ def process_cicy(args):
     # Classes de Kahler candidates : ne dependent que de la geometrie, donc
     # construites une fois par CICY et non par extension.
     ctx_pente = None
+    D_kahler = None
     seen = set()
     stats_gen = {}
 
@@ -338,7 +339,14 @@ def process_cicy(args):
                 cohom = {i: coh_ex[i] for i in range(4)}
                 if abs(cohom[1] - cohom[2]) not in cibles_gen: continue
 
-                hoppe = hoppe_fast(c['ambient'], c['config'], monad, max_H=1)
+                # D = D_k(J) a J = (1,...,1). Passe a hoppe_fast pour
+                # activer la phase des twists, qui voit ce que H = 0 et
+                # H = e_i ne voient pas (§5.15).
+                if D_kahler is None:
+                    D_kahler = [int(x) for x in vecteur_D(d, [1] * m)]
+                hoppe = hoppe_fast(c['ambient'], c['config'], monad, max_H=1,
+                                   D=(D_kahler if all(x > 0 for x in D_kahler)
+                                      else None))
                 if not hoppe['stable']: continue
 
                 # --- wedge^2 V : uniquement si DETERMINE ------------------

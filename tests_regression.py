@@ -1349,6 +1349,138 @@ def t_pente_extension():
 
 
 # ======================================================================
+# 11 nonies. Hoppe sous sa forme SUFFISANTE : les twists
+# ======================================================================
+
+@test("Hoppe suffisant : 110 twists sur #6890, tous a source non vide")
+def t_hoppe_suffisant():
+    """
+    « c1(V) = 0 => V stable <=> h0(wedge^p V) = 0 » est une EQUIVALENCE
+    seulement si Pic(X) est de rang 1. #6890 et #6947 ont h11 = 5 : leur
+    verdict `stable` ne valait que « non elimine ». La forme suffisante
+    ajoute les torsions -- h0(wedge^p V(-H)) = 0 pour tout H de degre
+    deg_J(H) >= 0 -- et cet ensemble est fini parce que H est borne au
+    dessus par les charges de wedge^p B et en dessous par deg_J(H) >= 0
+    avec tous les D_k(J) > 0.
+
+    ----------------------------------------------------------------------
+    Le risque propre a ce test : un vert qui ne prouve rien
+    ----------------------------------------------------------------------
+    Un critere SUFFISANT verifie sur un ensemble vide est vrai sans rien
+    demontrer. Si les twists avaient tous une source vide, h0 vaudrait 0
+    sans qu'aucun rang ne soit calcule, et « stable » serait un artefact du
+    decoupage -- la meme faute que les exotiques structurellement nuls du
+    §4.8. Le volet (b) l'interdit explicitement.
+
+    Quatre references :
+
+    (a) VALEUR CONNUE D'AVANCE, negative. On construit une monade dont la
+        premiere colonne de f est nulle : c - b_1 a une composante negative,
+        donc f_1 = 0, donc O(b_1) est dans le noyau et
+        h0(V) >= dim H0(O(b_1)). Le calcul doit rendre EXACTEMENT cette
+        valeur, et les deux criteres doivent refuser.
+
+    (b) ANTI-VACUITE. Sur #6890, les 110 twists doivent avoir une source
+        NON VIDE -- le verdict porte sur 110 calculs de rang reels.
+
+    (c) STRUCTURE DU POLYTOPE. H = 0 doit y figurer a tout p, sans quoi le
+        critere suffisant ne CONTIENDRAIT pas l'ancien. Et un D a
+        composante nulle doit rendre None : la borne inferieure disparait,
+        l'ensemble n'est plus fini, on ne conclut pas.
+
+    (d) CONTENANCE. Tout ce que Hoppe nu elimine, la forme suffisante doit
+        l'eliminer aussi.
+    """
+    from cy_landscape.core.sections import Ring, P
+    from cy_landscape.core.equivariant_monad import (hoppe_sur_espace,
+                                                     hoppe_suffisant_sur_espace)
+    from cy_landscape.core.hoppe_fast import vecteur_D, polytope_twists
+    from cy_landscape.core.intersection import compute_intersection_numbers
+    from cy_landscape.data.parse_oxford import load_oxford_file
+
+    entries = {e['num']: e for e in load_oxford_file('cicylist.txt')}
+    e = entries[6890]
+    amb, cfg = e['ambient'], e['config']
+    m = len(amb)
+    D = [int(x) for x in vecteur_D(compute_intersection_numbers(amb, cfg),
+                                   [1] * m)]
+    assert all(x > 0 for x in D), ("D_k(1..1) doit etre > 0 : c'est lui qui "
+                                   "borne le polytope", D)
+
+    def monte(b, c):
+        R = Ring(amb, cfg, seed=2)
+        degres = [[[c[0][k] - b[i][k] for k in range(m)]
+                   for i in range(len(b))]]
+        cases = [(0, i) for i in range(len(b))
+                 if all(x >= 0 for x in degres[0][i])]
+        dims, offs, a = {}, {}, 0
+        for k in cases:
+            dims[k] = R.dimY(degres[0][k[1]])
+            offs[k] = a
+            a += dims[k]
+        return R, np.eye(a, dtype=np.int64), offs, dims, degres
+
+    # (c) structure du polytope
+    B = [[0, 1, 0, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0],
+         [0, 0, 1, 0, 0], [0, 0, 0, 1, 0]]
+    C = [[0, 1, 3, 1, 0]]
+    for q in (1, 2, 3):
+        Hs = polytope_twists(B, q, D)
+        assert Hs, (q, "polytope vide")
+        assert [0] * m in Hs, (q, "H = 0 absent du polytope : le critere "
+                                  "suffisant ne contiendrait pas l'ancien")
+    D0 = list(D)
+    D0[0] = 0
+    assert polytope_twists(B, 1, D0) is None,         "un D_k nul doit rendre None : le polytope n'est plus borne"
+
+    # (b) et positif : #6890 passe, et sur des sources non vides
+    R, base, offs, dims, degres = monte(B, C)
+    suf = hoppe_suffisant_sur_espace(R, B, C, base, offs, dims, degres, P,
+                                     np.random.RandomState(5), D)
+    assert suf['stable'] is True, (suf['stable'], suf['motif'])
+    n_tw = suf['n_twists']
+    assert n_tw >= 100, n_tw
+    assert suf['sources_non_vides'] == n_tw, (
+        f"{n_tw - suf['sources_non_vides']} twists a source VIDE : le "
+        f"verdict porterait sur un ensemble sans contenu", suf['detail'])
+    # LE TWIST DOIT AGIR. Si le parametre etait ignore, chaque twist
+    # recalculerait H = 0 et toutes les sources seraient egales : le test
+    # resterait vert alors que le critere ne serait plus que l'ancien.
+    # Sur #6890 les h0 valent 0 partout, donc c'est la SEULE trace visible.
+    agit = [q for q, v in suf['detail'].items()
+            if v['source_H0'] is not None and v['source_max'] > v['source_H0']]
+    assert agit, (
+        "aucun twist n'agrandit la source par rapport a H = 0 : le "
+        "parametre `twist` est probablement ignore, et le critere retombe "
+        "sur l'ancien sans que rien ne le signale",
+        {q: (v['source_H0'], v['source_max']) for q, v in suf['detail'].items()})
+
+    # (a) valeur connue d'avance, negative : f_1 = 0 met O(b_1) dans le noyau
+    Bd = [[0, 2, 0, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0], [0, -1, 0, 1, 0]]
+    assert [sum(x[k] for x in Bd) for k in range(m)] == C[0], "c1(V) != 0"
+    R2, base2, offs2, dims2, degres2 = monte(Bd, C)
+    attendu = R2.dimY(Bd[0])
+    assert attendu > 0, attendu
+    nu = hoppe_sur_espace(R2, Bd, C, base2, offs2, dims2, degres2, P,
+                          np.random.RandomState(5))
+    su = hoppe_suffisant_sur_espace(R2, Bd, C, base2, offs2, dims2, degres2,
+                                    P, np.random.RandomState(5), D)
+    assert nu['stable'] is False, nu
+    assert f'= {attendu}' in nu['motif'], (nu['motif'], attendu)
+    # (d) contenance
+    assert su['stable'] is False, (
+        "Hoppe nu elimine mais la forme suffisante non : elle doit le "
+        "CONTENIR (H = 0 fait partie du polytope)", su['motif'])
+
+    return (f"#6890 : {n_tw} twists de degre >= 0, tous a source non vide "
+            f"(max {max(v['source_max'] for v in suf['detail'].values())}, "
+            f"contre {suf['detail'][3]['source_H0']} a H = 0), "
+            f"tous a h0 nul -> stable pour J = (1,1,1,1,1) ; controle "
+            f"negatif construit : h0(V) = {attendu} = dim H0(O(b_1))")
+
+
+# ======================================================================
 # 12. Ordre projectif et racines n-iemes
 # ======================================================================
 

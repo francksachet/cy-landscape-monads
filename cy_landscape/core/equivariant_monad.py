@@ -452,7 +452,8 @@ def h0_wedge2_V_sur_espace(anneau, b_charges, c_charges, base, offsets, dims,
 
 
 def h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, p_ext, base, offsets,
-                           dims, degres, p, rng, n_essais=5, maxdim=6000):
+                           dims, degres, p, rng, n_essais=5, maxdim=6000,
+                           twist=None):
     """
     h^0(wedge^p V) pour un f tire dans un sous-espace donne. rank_C = 1.
 
@@ -504,6 +505,23 @@ def h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, p_ext, base, offsets,
     Le dernier teste la construction entiere -- sources, cibles et SIGNES --
     contre une valeur connue d'avance.
 
+    ----------------------------------------------------------------------
+    Le parametre `twist`
+    ----------------------------------------------------------------------
+    `twist = H` calcule h^0(wedge^p V (-H)) au lieu de h^0(wedge^p V). La
+    resolution est la meme tordue par O(-H) :
+
+        0 -> wedge^p V(-H) -> wedge^p B(-H) -> wedge^{p-1}B (x) C(-H) -> ...
+
+    et la contraction par f est INCHANGEE -- f_{i} est de degre c - b_i, que
+    le decalage de la source et de la cible par le meme -H ne modifie pas.
+    Il suffit donc de retrancher H aux deux degres.
+
+    A quoi cela sert : le critere de Hoppe sous la forme h^0(wedge^p V) = 0
+    (twist nul) est une EQUIVALENCE avec la stabilite seulement si Pic(X) est
+    de rang 1. En rang superieur la forme suffisante demande
+    h^0(wedge^p V(-H)) = 0 pour tout H de degre positif ou nul (§5.14).
+
     Renvoie (h0_min, dim_source), ou (None, ...) si hors taille : l'appelant
     ne doit alors PAS conclure.
     """
@@ -519,9 +537,11 @@ def h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, p_ext, base, offsets,
 
     src_idx = list(combinations(range(n), p_ext))
     dst_idx = list(combinations(range(n), p_ext - 1))
-    src_deg = {I: [sum(b_charges[i][k] for i in I) for k in range(m)]
+    tw = [0] * m if twist is None else [int(x) for x in twist]
+    src_deg = {I: [sum(b_charges[i][k] for i in I) - tw[k] for k in range(m)]
                for I in src_idx}
-    dst_deg = {J: [sum(b_charges[j][k] for j in J) + c[k] for k in range(m)]
+    dst_deg = {J: [sum(b_charges[j][k] for j in J) + c[k] - tw[k]
+                   for k in range(m)]
                for J in dst_idx}
 
     dsrc_par = {I: anneau.dimY(src_deg[I]) for I in src_idx}
@@ -576,6 +596,97 @@ def h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, p_ext, base, offsets,
         h0 = dsrc - rang
         meilleur = h0 if meilleur is None else min(meilleur, h0)
     return meilleur, dsrc
+
+
+def hoppe_suffisant_sur_espace(anneau, b_charges, c_charges, base, offsets,
+                               dims, degres, p, rng, D, maxdim=6000,
+                               plafond_twists=200000):
+    """
+    Critere de Hoppe sous sa forme SUFFISANTE, restreint a un sous-espace.
+
+    ----------------------------------------------------------------------
+    Ce que `hoppe_sur_espace` ne dit pas
+    ----------------------------------------------------------------------
+    « c1(V) = 0 => V stable <=> h0(wedge^p V) = 0 » est une EQUIVALENCE
+    seulement si Pic(X) est de rang 1. Sur une CICY a m > 1 -- et #6890
+    comme #6947 ont h11 = 5 -- elle reste NECESSAIRE sans etre suffisante :
+    elle ne voit pas la classe de Kahler. Un verdict `stable: True` de
+    `hoppe_sur_espace` se lit donc « non elimine ».
+
+    La forme suffisante ajoute les torsions : V est mu_J-stable des que
+
+        h0(wedge^p V(-H)) = 0   pour p = 1..rk-1 et tout H avec
+                                deg_J(H) >= 0
+
+    car un sous-faisceau destabilisant de wedge^p V fournirait une section
+    non nulle de wedge^p V(-H) pour un tel H. L'ensemble des H est fini et
+    petit (`hoppe_fast.polytope_twists`).
+
+    Le twist H = 0 est inclus dans le polytope : ce critere CONTIENT donc
+    `hoppe_sur_espace`, il ne s'y substitue pas.
+
+    ----------------------------------------------------------------------
+    Trois issues, jamais confondues
+    ----------------------------------------------------------------------
+      True  -> stable pour CETTE classe de Kahler J. DEMONTRE.
+      False -> un H de degre >= 0 donne une section : V n'est pas stable
+               pour J, et le H en question est le temoin.
+      None  -> au moins un h0 hors de portee, ou polytope non borne /
+               au-dela du plafond. On ne conclut pas -- et surtout on ne
+               compte pas cela comme un succes : un critere suffisant n'a
+               de valeur que s'il est verifie EN ENTIER.
+    """
+    from cy_landscape.core.hoppe_fast import polytope_twists
+    rk = len(b_charges) - len(c_charges)
+    detail, incomplet = {}, []
+    for q in range(1, rk):
+        Hs = polytope_twists(b_charges, q, D, plafond=plafond_twists)
+        if Hs is None:
+            return {'stable': None, 'motif': f'polytope des twists non borne '
+                                             f'ou hors plafond a p = {q}',
+                    'detail': detail, 'n_twists': None}
+        # `sources_non_vides` mesure si le verdict a du CONTENU. Un twist
+        # dont la source est vide donne h0 = 0 sans qu'aucun rang ne soit
+        # calcule : un critere dont tous les twists seraient vides serait
+        # vrai sans rien prouver. L'appelant doit pouvoir le voir.
+        # `source_H0` sert de temoin que le twist AGIT : si le parametre
+        # etait ignore, toutes les sources vaudraient celle de H = 0 et
+        # `source_max` retomberait dessus. Le test de regression l'exige
+        # strictement superieur -- sans quoi un twist neutralise passerait
+        # inapercu, tous les h0 valant 0 de toute facon sur les candidats.
+        detail[q] = {'n_twists': len(Hs), 'non_nuls': [], 'indetermines': 0,
+                     'sources_non_vides': 0, 'source_max': 0,
+                     'source_H0': None}
+        for H in Hs:
+            h, dsrc = h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, q,
+                                             base, offsets, dims, degres, p,
+                                             rng, maxdim=maxdim, twist=H)
+            if dsrc > 0:
+                detail[q]['sources_non_vides'] += 1
+                detail[q]['source_max'] = max(detail[q]['source_max'], dsrc)
+            if not any(H):
+                detail[q]['source_H0'] = dsrc
+            if h is None:
+                detail[q]['indetermines'] += 1
+                incomplet.append((q, tuple(H)))
+            elif h > 0:
+                detail[q]['non_nuls'].append((list(H), int(h)))
+                return {'stable': False,
+                        'motif': f'h0(wedge^{q} V(-H)) = {h} avec H = {H}, '
+                                 f'deg_J(H) >= 0',
+                        'detail': detail, 'temoin': list(H)}
+    if incomplet:
+        return {'stable': None,
+                'motif': f'{len(incomplet)} twists hors de portee '
+                         f'(maxdim) -- critere incomplet',
+                'detail': detail, 'incomplet': incomplet[:5]}
+    n = sum(v['n_twists'] for v in detail.values())
+    nv = sum(v['sources_non_vides'] for v in detail.values())
+    return {'stable': True,
+            'motif': f'stable pour cette classe de Kahler : {n} twists de '
+                     f'degre >= 0 testes, tous a h0 nul, dont {nv} a source '
+                     f'non vide',
+            'detail': detail, 'n_twists': n, 'sources_non_vides': nv}
 
 
 def hoppe_sur_espace(anneau, b_charges, c_charges, base, offsets, dims,

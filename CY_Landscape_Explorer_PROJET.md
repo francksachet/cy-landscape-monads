@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 27 tests.
+> non une propriété des candidats, et la suite compte 28 tests.
 
 ---
 
@@ -105,7 +105,7 @@ cy_landscape/
     ├── sections.py            anneaux de sections, rangs réels mod p
     ├── braun_symmetry.py      lecture COMPLÈTE de CicyQuotients.m           [+]
     ├── covariant_ring.py      idéal Γ-covariant, CovariantRing              [+]
-    ├── equivariant_monad.py   f équivariante, h⁰(∧^p V) restreint pour     [+]
+    ├── equivariant_monad.py   f équivariante, h⁰(∧^p V(−H)) restreint     [+]
     │                          tout p (donc Hoppe complet, h³ inclus),
     │                          certificat de surjectivité,
     │                          décomposition de H¹(V) et H¹(∧²V) sous Γ
@@ -118,7 +118,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        27 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        28 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -900,6 +900,82 @@ Vérifié en cassant, de trois façons : convertir les `None` en `False` fait
 tomber le quatrième volet ; renvoyer toujours `True` fait tomber le contrôle
 négatif ; renvoyer toujours `False` fait tomber le contrôle positif.
 
+
+### 5.14 Hoppe suffisant — la réserve du §5.13 est levée sur les deux candidats
+
+Le §5.13 laissait le résultat principal en suspens : `#6890` et `#6947` vivent
+dans P¹×P¹×P¹×P¹×P⁴, donc **h¹¹ = 5**, et l'équivalence de Hoppe suppose
+Pic(X) de rang 1. Leur verdict ne valait que « non éliminé ».
+
+**La forme suffisante.** V est μ_J-stable **dès que**
+
+```
+h⁰(∧^p V(−H)) = 0   pour p = 1..rk−1 et tout H avec deg_J(H) ≥ 0
+```
+
+Écrit ainsi l'ensemble des H paraît infini. Il ne l'est pas :
+
+- ∧^pV(−H) ⊂ ∧^pB(−H), et dans le modèle S/I employé ici h⁰(O(a)) = 0 dès
+  qu'une composante de a est négative. Donc **H ≤ une charge de ∧^pB** : borné
+  au-dessus.
+- deg_J(H) = Σ_k H_k·D_k(J) ≥ 0 avec tous les D_k(J) > 0 et H_k ≤ hi_k borne H
+  **en dessous**.
+
+Le polytope est compact, et petit : **110 twists pour `#6890`, 143 pour
+`#6947`**, tous degrés p confondus. `h0_wedgep_V_sur_espace` gagne un paramètre
+`twist` — la résolution est la même tordue par O(−H), et la contraction par f
+est inchangée puisque f_i est de degré c − b_i, que décaler source et cible du
+même −H ne modifie pas.
+
+#### Résultat
+
+| CICY | λ | twists testés | sources non vides | verdict |
+|---|---|---|---|---|
+| **6890** | +1 | 110 | **110 / 110** (dim max 78) | **stable à J = (1,1,1,1,1)** |
+| 6890 | −1 | 110 | 110 / 110 | stable |
+| **6947** | +1 | 143 | **143 / 143** (dim max 78) | **stable à J = (1,1,1,1,1)** |
+| 6947 | −1 | 143 | 143 / 143 | stable |
+
+Calcul fait sur le **sous-espace équivariant**, pas sur l'espace générique : h⁰
+étant semi-continu supérieurement, une stabilité générique n'entraînerait pas
+celle du f contraint. Zéro twist hors de portée.
+
+**Le point qui rend ce vert défendable, c'est la colonne « sources non
+vides ».** Un critère suffisant vérifié sur des sources vides serait vrai sans
+rien démontrer — la faute des exotiques structurellement nuls du §4.8. Ici les
+253 twists portent tous sur un calcul de rang réel, jusqu'à la dimension 78.
+
+**Conclusion : `#6890` et `#6947` sont des fibrés stables**, au sens propre et
+pour une classe de Kähler explicite, et non plus seulement « non éliminés ». Le
+§2 tient. La distinction entre λ = +1 et λ = −1 reste portée par la seule
+surjectivité (§5.4), la stabilité ne les départageant pas.
+
+#### Ce que le twist n'apporte pas, mesuré
+
+Sur **1 592 monades positives et 4 501 twists non nuls** échantillonnés sur la
+liste, la marge `dim source − dim cible` vaut **au plus −2** — elle n'atteint
+jamais 0. Un twist H ≠ 0 ne peut donc pas déstabiliser par comptage de
+dimensions sur cette famille : seul H = 0 le peut. Autrement dit la réserve du
+§5.13, réelle en principe, **ne mord pas sur le domaine des monades positives**.
+C'est une mesure, pas un théorème — la déstabilisation par non-injectivité de
+l'application reste possible, et c'est pourquoi les 253 twists ont bien été
+calculés plutôt que supposés nuls.
+
+#### Le 28ᵉ test
+
+| volet | référence |
+|---|---|
+| valeur connue d'avance, négative | monade construite avec c − b₁ à composante négative : f₁ = 0, donc O(b₁) ⊂ V et h⁰(V) = dim H⁰(O(b₁)) = 3 exactement |
+| **anti-vacuité** | les 110 twists de `#6890` doivent avoir une source **non vide** |
+| **le twist doit agir** | `source_max` doit dépasser strictement la source à H = 0 (78 contre 64) |
+| structure du polytope | H = 0 doit y figurer à tout p, sinon le critère ne contiendrait pas l'ancien ; un D_k nul doit rendre `None` |
+| contenance | tout ce que Hoppe nu élimine, la forme suffisante doit l'éliminer |
+
+Le troisième volet vient d'un cassage qui **passait** : neutraliser le paramètre
+`twist` laissait le test vert, tous les h⁰ valant 0 de toute façon sur `#6890`.
+La variation de la dimension de la source est la seule trace visible du fait que
+le twist agit.
+
 ---
 
 ## 6. Ce qui reste faux ou absent
@@ -909,7 +985,7 @@ négatif ; renvoyer toujours `False` fait tomber le contrôle positif.
 | voie « gros Γ » | **fermée, mesurée.** Le verrou n'était ni la certification Koszul ni les charges négatives, mais la ligne `len(c_charges) != 1` de `domaine_valide` : les 26 candidats à groupe d'ordre compatible sont tous E₆ à rank_C = 2, dont 24 satisfont tout le reste. Contrainte levée (`rank_c_max=None`, défaut 1 pour ne pas casser `hoppe_fast`) puis test relancé : **574 couples, 544 tués par h⁰(V) équivariant, 28 sans f équivariant, 0 survivant**. Aucun candidat à Γ d'ordre ≥ 4 ne passe la stabilité restreinte. Étendre ∧^p V et la surjectivité à rank_C = 2 est donc **inutile** : il n'y aurait rien à leur donner à manger |
 | surjectivité au rang 5 | **bloquant ensuite** : les 40 candidats du scan « gros Γ » sont tous de rang 5, précisément le régime où le certificat J_d = R_d n'est pas atteignable (§5.4). Le critère de Hoppe les départagera, mais le verdict final restera `indéterminé` tant que ce point n'est pas traité |
 | **branche extension** | chemin correct, **énuméré, testé, branché**, avec certificat de pente (§5.10, §5.12, §5.13). **Restent** : H¹(∧²V) donc le compte de Higgs et les exotiques ; `verify_hoppe.py` ignore les extensions ; la chaîne d'équivariance ne lit que des monades |
-| **portée du verdict de Hoppe** | `stable: True` signifie « non éliminé », pas « stable » : l'équivalence de Hoppe suppose Pic(X) de rang 1 (§5.13). Sur les extensions, `pente_extension` comble une partie du trou et démontre 105 instabilités sur un lot de 2 647. **Sur les monades, la réserve est entière et non instruite** — y compris pour les deux candidats du §2 |
+| **portée du verdict de Hoppe** | `stable: True` signifie « non éliminé », pas « stable » : l'équivalence suppose Pic(X) de rang 1 (§5.13). **Levé sur `#6890` et `#6947`** par la forme suffisante — 253 twists, tous à source non vide, tous à h⁰ nul : ce sont des fibrés stables à J = (1,1,1,1,1) (§5.14). **Reste ouvert sur le reste du catalogue** : `hoppe_fast` en est toujours à `max_H = 1`, et `hoppe_suffisant_sur_espace` n'y est pas branché |
 | décision exacte de la pente | le certificat de Motzkin démontre l'instabilité quand il aboutit ; **la réciproque demanderait un solveur de programmation linéaire**, absent du dépôt (numpy seul). Les verdicts `None` ne sont donc ni des éliminations ni des validations |
 | énumération de `generate_extensions` | **faite** (§5.12) : monotone en `max_charge` par construction, avec plafond `--ext-exhaustif-max` et champ `ext_mode` qui dit, résultat par résultat, si l'énoncé est démontré sur le domaine ou seulement sondé |
 | ligne de Wilson explicite | **non construite** — le §5.8 est de la théorie des groupes appliquée aux nombres calculés ; le code ne manipule aucune ligne de Wilson. La corrélation entre Γ et la ligne de Wilson, qui décide de 2 ou 6 bidoublets de Higgs, reste un intrant |
@@ -964,7 +1040,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 27 tests, ~1 min. À lancer après chaque modification,
+**`tests_regression.py` — 28 tests, ~1 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -987,6 +1063,7 @@ Huit ajouts de la session « équivariance » :
 | spectre sous Γ | **valeur connue d'avance** : Γ libre ⇒ partie invariante = 6/2 = 3, donc 3 + 3 ; + additivité des multiplicités ; + β∘α = 0 et h⁰(∧²V) concordant par deux chemins | oui : ignorer l'image de f casse d'abord le contrôle d'additivité |
 | surjectivité de f | contrôle **négatif construit** : un f à facteur commun a un zéro commun, le critère doit refuser ; + λ=+1 certifie et λ=−1 non sur `#6890` | oui : une fonction renvoyant toujours `True` échoue |
 | ordre projectif | racines n-ièmes construites comme puissances, comptage = pgcd(n, p−1) | oui : l'ancienne `racines_niemes` rendait la liste vide sur 7³ = 343 |
+| Hoppe suffisant | valeur connue d'avance négative (f₁ = 0 ⟹ h⁰(V) = dim H⁰(O(b₁))) ; **anti-vacuité** : les 110 twists doivent avoir une source non vide ; et le twist doit **agir**, la source devant varier avec H | oui, dont un cassage qui passait d'abord : neutraliser `twist` laissait le test vert |
 | pente des sous-faisceaux | degré au point J = v contre Riemann-Roch ; **deux verdicts opposés construits** ; et un cas réel où un témoin existe hors grille, qui doit rendre `None` et non `False` | oui, de trois façons : convertir les `None` en `False`, renvoyer toujours `True`, renvoyer toujours `False` |
 | extensions énumérées | comptage par convolution contre comptage par énumération ; **contrôle négatif construit** : le tirage doit être vu perdre 245/281 extensions d'un cran de `max_charge` au suivant | oui, dans les deux sens : revenir au tirage casse la monotonie ; rendre le tirage monotone casse le contrôle négatif |
 
@@ -1055,6 +1132,10 @@ python -u equivariance_f.py cicyquotients.m cicylist.txt scan_gros_gamma
 #   Resultat : 3 732 couples, 3 376 tues par h0(V), 356 indetermines (rang 5),
 #   0 survivant -- et AUCUN couple evalue sur un groupe d'ordre compatible,
 #   ces 26 candidats-la etant hors domaine faute de certification Koszul.
+
+# critere de Hoppe SUFFISANT sur un candidat (twists, §5.14)
+#   hoppe_suffisant_sur_espace(anneau, b, c, base, offsets, dims, degres,
+#                              p, rng, D)  avec D = hoppe_fast.vecteur_D(d, J)
 
 # chaine complete au niveau des polynomes (~1 h)
 python -u equivariance_f.py cicyquotients.m cicylist.txt scan_wilson2

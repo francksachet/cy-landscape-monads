@@ -277,3 +277,79 @@ def hoppe_fast(ambient, config, monad, max_H=1):
     return {"stable": True,
             "reason": f"Hoppe satisfait ({tests} tests, rangs 1..{rk-1})",
             "tests": tests}
+
+
+# ======================================================================
+# LE POLYTOPE DES TWISTS -- la forme SUFFISANTE du critere (§5.14)
+# ======================================================================
+
+
+def vecteur_D(d_ijk, J):
+    """D_k(J) = sum_jk d_kjl J_j J_l. deg_J(O(a)) = sum_k a_k D_k(J)."""
+    d = np.asarray(d_ijk, dtype=np.int64)
+    Jv = np.asarray(J, dtype=np.int64)
+    return np.einsum('ijk,j,k->i', d, Jv, Jv)
+
+
+def charges_wedge_B(b_charges, p_ext):
+    """Charges de wedge^p B : sommes sur les p-uplets croissants de b_i."""
+    from itertools import combinations
+    m = len(b_charges[0])
+    return [[sum(b_charges[i][k] for i in idx) for k in range(m)]
+            for idx in combinations(range(len(b_charges)), p_ext)]
+
+
+def polytope_twists(b_charges, p_ext, D, plafond=200000):
+    """
+    TOUS les H a tester pour rendre le critere de Hoppe SUFFISANT au degre p.
+
+    ----------------------------------------------------------------------
+    Pourquoi cet ensemble, et pourquoi il est fini
+    ----------------------------------------------------------------------
+    V est mu_J-stable DES QUE h^0(wedge^p V(-H)) = 0 pour p = 1..rk-1 et
+    tout O(H) de degre deg_J(H) >= 0. Ecrit ainsi l'ensemble des H parait
+    infini. Il ne l'est pas :
+
+      - wedge^p V(-H) est un sous-faisceau de wedge^p B(-H), donc
+        h^0(wedge^p V(-H)) <= sum_I h^0(O(ch_I - H)). Dans le modele
+        S/I employe ici, h^0(O(a)) = 0 des qu'une composante de a est
+        negative. Il faut donc H <= ch_I pour AU MOINS un I : H est borne
+        SUPERIEUREMENT par les charges de wedge^p B.
+
+      - deg_J(H) = sum_k H_k D_k(J) >= 0 avec tous les D_k(J) > 0 et
+        H_k <= hi_k borne alors H INFERIEUREMENT :
+        H_k >= -(sum_{l != k} hi_l D_l) / D_k.
+
+    Le polytope est donc compact, et petit en pratique : 110 twists pour
+    #6890 et 143 pour #6947, tous degres p confondus.
+
+    Renvoie None si un D_k(J) est nul -- la borne inferieure disparait et
+    l'ensemble n'est plus fini par cet argument -- ou si le decompte depasse
+    `plafond`. Dans les deux cas l'appelant ne doit PAS conclure a la
+    stabilite : c'est un critere suffisant, il n'a de valeur que complet.
+    """
+    from itertools import product
+    ch = charges_wedge_B(b_charges, p_ext)
+    if not ch:
+        return []
+    m = len(ch[0])
+    D = [int(x) for x in D]
+    if any(x <= 0 for x in D):
+        return None
+    hi = [max(c[k] for c in ch) for k in range(m)]
+    lo = []
+    for k in range(m):
+        reste = sum(hi[l] * D[l] for l in range(m) if l != k)
+        lo.append(-(reste // D[k]) - 1)
+    taille = 1
+    for k in range(m):
+        taille *= (hi[k] - lo[k] + 1)
+        if taille > plafond:
+            return None
+    out = []
+    for H in product(*[range(lo[k], hi[k] + 1) for k in range(m)]):
+        if sum(H[k] * D[k] for k in range(m)) < 0:
+            continue
+        if any(all(H[k] <= c[k] for k in range(m)) for c in ch):
+            out.append(list(H))
+    return out

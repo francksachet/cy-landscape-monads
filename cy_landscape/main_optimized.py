@@ -32,7 +32,7 @@ def process_cicy(args):
     """Worker : traite une CICY."""
     (c, max_charge, n_random, seed, sampling_threshold, sampling_budget,
      with_extensions, cibles_gen, ordres_gamma, positive_only,
-     exhaustif_max) = args
+     exhaustif_max, ext_exhaustif_max) = args
 
     from cy_landscape.core.intersection import (
         compute_intersection_numbers, compute_euler_from_intersection, compute_c2_tangent)
@@ -45,8 +45,9 @@ def process_cicy(args):
     from cy_landscape.core.chi_exact import ChiCalculator
     from cy_landscape.core.exact_cohomology import koszul_cohomology_ex
     from cy_landscape.core.extensions import (
-        ExtensionBundle, check_extension_exists, compute_extension_cohomology,
-        generate_extensions)
+        ExtensionBundle, check_extension_exists, chi_extension,
+        hoppe_extension, cohomology_extension_ex, generate_extensions,
+        pente_extension, ContextePente)
     from cy_landscape.core.cache import set_geometry
     from cy_landscape.core.hoppe_fast import hoppe_fast
     from cy_landscape.core.monad_wedge import cohomology_wedge2_V
@@ -88,6 +89,12 @@ def process_cicy(args):
     # [monades vues, passant le prefiltre chi, ecartees faute de certification]
     n_prefiltre = [0, 0, 0]
     n_degeneres = [0]
+    # [extensions vues, passant le prefiltre chi, non eliminees par la
+    #  pente, Hoppe-stables]
+    n_ext = [0, 0, 0, 0]
+    # Classes de Kahler candidates : ne dependent que de la geometrie, donc
+    # construites une fois par CICY et non par extension.
+    ctx_pente = None
     seen = set()
     stats_gen = {}
 
@@ -126,36 +133,138 @@ def process_cicy(args):
                 all_monads.append((kind, monad))
 
         # ------------------------------------------------------------------
-        # BRANCHE EXTENSION -- DESACTIVEE PAR DEFAUT
+        # BRANCHE EXTENSION -- chemin propre (§5.10)
         # ------------------------------------------------------------------
-        # Le pipeline construit ici une pseudo-monade B = F1 (+) F2, C = F2
-        # pour reutiliser le chemin des monades. Or le noyau de F1(+)F2 -> F2
-        # est de rang rank(F1), tandis que le fibre d'extension
-        # 0 -> F1 -> V -> F2 -> 0 est de rang rank(F1) + rank(F2).
-        # Cohomologie, test de Hoppe et groupe de jauge portent donc sur un
-        # AUTRE objet que celui inscrit dans le resultat.
+        # L'ancien code construisait ici une pseudo-monade B = F1 (+) F2,
+        # C = F2 pour reutiliser le chemin des monades. Or le noyau de
+        # F1(+)F2 -> F2 est de rang rank(F1), tandis que le fibre
+        # d'extension 0 -> F1 -> V -> F2 -> 0 est de rang
+        # rank(F1) + rank(F2) : cohomologie, Hoppe et groupe de jauge
+        # portaient sur un AUTRE objet que celui inscrit dans le resultat
+        # (1571 entrees sur 1571 en incoherence de rang sur test_v3).
         #
-        # Mesure : sur le scan test_v3, 1571 entrees `extension` sur 1571
-        # ont un rang effectif incoherent avec le rang annonce -- soit 79 %
-        # de la sortie totale du scan.
+        # Ce chemin-ci n'utilise plus la pseudo-monade. Il ne passe pas non
+        # plus par la boucle `all_monads` ci-dessous : un fibre d'extension
+        # n'est pas un noyau de monade et rien de ce qui suit ne
+        # s'appliquerait. Ordre des filtres, du moins cher au plus cher :
         #
-        # Reparer demande de calculer la cohomologie du vrai fibre
-        # d'extension et de lui appliquer Hoppe, ce qui suppose de traiter
-        # les extensions non triviales : chantier a part entiere.
-        # --with-extensions permet de la reactiver, en connaissance de cause.
+        #   1. chi(V) = chi(F1) + chi(F2), arithmetique pure, EXACT ;
+        #   2. pente : les sous-faisceaux lisibles sur la filtration
+        #      doivent pouvoir etre de degre negatif pour une classe de
+        #      Kahler. On n'ecarte QUE sur certificat -- l'echec de la
+        #      recherche d'un temoin ne demontre rien (voir extensions.py) ;
+        #   3. Ext^1(F2, F1) != 0 -- sinon seule l'extension scindee
+        #      existe, et une somme directe n'est jamais stable ;
+        #   4. Hoppe par borne superieure sur les quotients gradues -- la
+        #      borne ne donne pas de faux positif, mais le critere lui-meme
+        #      n'est qu'une condition NECESSAIRE des que Pic(X) n'est pas
+        #      de rang 1 : d'ou l'etape 2, qui voit ce que Hoppe ne voit
+        #      pas ;
+        #   5. cohomologie par bornes rigoureuses, sans hypothese de rang
+        #      maximal -- l'hypothese qui avait fausse §4.3 et §4.4.
+        stats_ext = {}
         if with_extensions:
-            for ext in generate_extensions(m, rank_V, max_charge=3,
-                                           n_random=n_random, rng=rng):
+            for ext in generate_extensions(
+                    m, rank_V, max_charge=max_charge, n_random=n_random,
+                    seed=seed, exhaustif_max=ext_exhaustif_max,
+                    stats=stats_ext):
                 try:
-                    exists, _ = check_extension_exists(ext, c['ambient'], c['config'])
-                    if not exists: continue
-                    cohom = compute_extension_cohomology(ext, c['ambient'], c['config'])
-                    if cohom and abs(cohom[1] - cohom[2]) == 3:
-                        pseudo = MonadBundle(ext.f1_charges + ext.f2_charges,
-                                             ext.f2_charges)
-                        all_monads.append(('extension', pseudo))
+                    n_ext[0] += 1
+                    # 1. prefiltre chi -- exact, quelques multiplications
+                    chi_V = chi_extension(ext, chical)
+                    if abs(chi_V) not in cibles_gen:
+                        continue
+                    n_ext[1] += 1
+
+                    # 2. pente. Arithmetique pure sur les d_ijk, donc placee
+                    #    avant toute cohomologie. On n'ecarte que sur
+                    #    `False`, qui est DEMONTRE ; `None` est conserve et
+                    #    trace, parce qu'un echec de recherche de temoin
+                    #    suit le budget de recherche et non la geometrie.
+                    if ctx_pente is None:
+                        ctx_pente = ContextePente(d, m)
+                    pen = pente_extension(ext, ctx=ctx_pente)
+                    if pen['stable_possible'] is False:
+                        continue
+                    n_ext[2] += 1
+
+                    # 3. l'extension non scindee doit exister
+                    exists, h1_ext = check_extension_exists(
+                        ext, c['ambient'], c['config'])
+                    if not exists:
+                        continue
+
+                    # 4. Hoppe. La BORNE ne donne pas de faux positif ; le
+                    #    critere, lui, n'est qu'une condition necessaire des
+                    #    que Pic(X) n'est pas de rang 1. `stable` vaut True
+                    #    ou None ; on n'inscrit que les True.
+                    hop = hoppe_extension(ext, c['ambient'], c['config'])
+                    if hop['stable'] is not True:
+                        continue
+                    n_ext[3] += 1
+
+                    # 5. cohomologie par bornes ; None = non certifie, on
+                    #    n'invente rien.
+                    coh_ext = cohomology_extension_ex(
+                        ext, c['ambient'], c['config'], chical=chical)
+                    if coh_ext is None:
+                        continue
+
+                    b1 = coh_ext['bounds'][1]
+                    b2 = coh_ext['bounds'][2]
+                    results.append({
+                        'type': 'extension', 'stable': True,
+                        'cicy': c['num'], 'h11': c['h11'], 'h21': c['h21'],
+                        'chi': c['chi'],
+                        'ambient': "x".join(f"P{n}" for n in c['ambient']),
+                        'rank_V': ext.rank_V, 'gauge': gauge,
+                        # n_gen = |chi(V)| est LEGITIME ici : la stabilite est
+                        # prouvee, donc h0 = h3 = 0.
+                        'n_gen': int(abs(chi_V)),
+                        'n_gen_amont': int(abs(chi_V)),
+                        'chi_V': int(chi_V),
+                        # h1 et h2 ne sont inscrits que s'ils sont DETERMINES.
+                        'cohomology': ([0, coh_ext[1], coh_ext[2], 0]
+                                       if coh_ext['determine'][1] else None),
+                        'coh_bounds': {str(k): list(v) for k, v in
+                                       coh_ext['bounds'].items()},
+                        # chi confronte a la somme alternee des h^i quand
+                        # les quatre degres sont certifies (deux chemins).
+                        'chi_recoupe': coh_ext['chi_recoupe'],
+                        'f1_charges': [list(x) for x in ext.f1_charges],
+                        'f2_charges': [list(x) for x in ext.f2_charges],
+                        # Pas de (B, C) : un fibre d'extension n'est pas un
+                        # noyau de monade. Les laisser vides plutot que d'y
+                        # remettre la pseudo-monade du defaut 4.7.
+                        'b_charges': [], 'c_charges': [],
+                        'hoppe': hop['etat'],
+                        # `stable` ici = « non elimine par Hoppe », pas
+                        # « stable » : voir extensions.py.
+                        'pente_etat': pen['etat'],
+                        'pente_verdict': pen['stable_possible'],
+                        'pente_temoin_J': pen['temoin'],
+                        'pente_J_exhaustif': pen['J_exhaustif'],
+                        'hoppe_bornes': {str(k): int(v)
+                                         for k, v in hop['bornes'].items()},
+                        'ext1': int(h1_ext),
+                        # Le spectre detaille (Higgs, exotiques) demanderait
+                        # H^1(w^2 V) : non calcule sur cette branche.
+                        'higgs': 0, 'higgs_certifie': False,
+                        'exotics': 0, 'reps': {},
+                        'score': 30 + 25 + 2,
+                        'gen': GENERATOR_VERSION,
+                        # DEMONTRE sur le domaine, ou simple sondage : sans
+                        # ce champ un resultat d'absence serait ininterpretable
+                        # (§5.11).
+                        'ext_mode': ('exhaustif'
+                                     if stats_ext.get('ext_exhaustifs')
+                                     else 'echantillonne'),
+                        'ext_max_charge': int(max_charge),
+                        'ordres_gamma': sorted(ordres_gamma),
+                        'cibles_chi': sorted(cibles_gen),
+                    })
                 except Exception:
-                    pass
+                    continue
 
         for kind, monad in all_monads:
             try:
@@ -298,7 +407,8 @@ def process_cicy(args):
                 continue
 
     return {'cicy': c['num'], 'results': results, 'skipped': None,
-            'prefilter': tuple(n_prefiltre), 'degeneres': n_degeneres[0]}
+            'prefilter': tuple(n_prefiltre), 'degeneres': n_degeneres[0],
+            'extensions': tuple(n_ext)}
 
 
 class ProgressFile:
@@ -430,14 +540,29 @@ def _param_differences(saved, current, defaults):
     return diffs
 
 
+def cle_identite(r):
+    """
+    Identifiant d'un candidat : (cicy, type, charges).
+
+    Une monade est identifiee par (B, C), un fibre d'extension par
+    (F1, F2). Une cle basee sur les seuls `b_charges`/`c_charges`
+    replierait TOUTES les extensions d'une meme CICY sur la cle vide et
+    n'en garderait qu'une -- mesure sur un scan max_ps <= 3 : 2 647
+    extensions reduites a 132. Le repli est SILENCIEUX : rien ne
+    distinguerait « une seule extension trouvee » de « 2 646 ecrasees ».
+    """
+    b = r.get('b_charges') or r.get('f1_charges') or []
+    c = r.get('c_charges') or r.get('f2_charges') or []
+    return (r.get('cicy'), r.get('type'),
+            tuple(tuple(x) for x in b), tuple(tuple(x) for x in c))
+
+
 def deduplicate_results(results):
-    """Supprime les doublons eventuels (cle : cicy, type, charges B et C)."""
+    """Supprime les doublons eventuels."""
     seen = set()
     unique = []
     for r in results:
-        key = (r['cicy'], r['type'],
-               tuple(tuple(b) for b in r['b_charges']),
-               tuple(tuple(c) for c in r['c_charges']))
+        key = cle_identite(r)
         if key in seen:
             continue
         seen.add(key)
@@ -500,11 +625,29 @@ def main():
     parser.add_argument('--n-gen', type=int, default=3,
                        help="Nombre de generations VOULU (sur le quotient si "
                             "--wilson est utilise). Defaut: 3.")
+    # RENOMME. `--with-extensions` designait l'ancien chemin par
+    # pseudo-monade, qui evaluait un fibre de rang different de celui qu'il
+    # annoncait (defaut 4.7, 1571 entrees sur 1571 incoherentes). Ce chemin
+    # n'existe plus : le laisser sous le meme nom ferait croire qu'on
+    # reactive l'ancien comportement, et un ancien script le rappellerait
+    # en silence. Le nouveau nom force a relire ce qu'on active.
+    parser.add_argument('--extensions', action='store_true',
+                       help="Active la branche `extension` sur le chemin "
+                            "propre (§5.10) : chi additif exact, Ext^1 != 0, "
+                            "Hoppe par bornes sur les quotients gradues "
+                            "(suffisant, jamais de faux positif), cohomologie "
+                            "par bornes rigoureuses. Ne construit plus de "
+                            "pseudo-monade.")
     parser.add_argument('--with-extensions', action='store_true',
-                       help="Reactive la branche `extension`, desactivee par "
-                            "defaut : elle evalue un fibre de rang different "
-                            "de celui qu'elle annonce (voir le commentaire "
-                            "dans process_cicy).")
+                       help=argparse.SUPPRESS)
+    parser.add_argument('--ext-exhaustif-max', type=int, default=200000,
+                       help="Plafond du nombre de tuples ORDONNES au-dela "
+                            "duquel la branche extension retombe sur "
+                            "l'echantillonnage. Par defaut le domaine est "
+                            "ENUMERE : le tirage n'est pas monotone en "
+                            "max_charge (216 pertes sur 222 en passant de 2 "
+                            "a 3), donc aucun enonce d'absence n'en decoule. "
+                            "0 = forcer l'echantillonnage.")
     parser.add_argument('--positive-only', action='store_true',
                        help="N'utiliser que le generateur positif. Les monades "
                             "classiques produisent des charges negatives, hors "
@@ -523,6 +666,15 @@ def main():
     parser.add_argument('--heartbeat', type=int, default=30,
                        help="Signal de vie toutes les N secondes si rien n'arrive (defaut: 30, 0=desactive)")
     args = parser.parse_args()
+
+    # `--with-extensions` designait l'ancien chemin par pseudo-monade, qui
+    # n'existe plus. On refuse plutot que d'activer silencieusement autre
+    # chose que ce que l'utilisateur croit demander.
+    if args.with_extensions:
+        parser.error(
+            "--with-extensions n'existe plus : il activait le chemin par "
+            "pseudo-monade du defaut 4.7 (rang et chi d'un AUTRE fibre). "
+            "Utiliser --extensions, qui active le chemin propre du §5.10.")
 
     n_jobs = args.jobs or cpu_count()
     out = args.output
@@ -559,10 +711,11 @@ def main():
         'seed': args.seed,
         'sampling_threshold': args.sampling_threshold,
         'sampling_budget': args.sampling_budget,
-        'with_extensions': args.with_extensions,
+        'with_extensions': args.extensions,
         'wilson': args.wilson, 'n_gen': args.n_gen,
         'positive_only': args.positive_only,
         'exhaustif_max': args.exhaustif_max,
+        'ext_exhaustif_max': args.ext_exhaustif_max,
     }
 
     # Valeurs par defaut des cles introduites APRES la creation d'un
@@ -571,7 +724,8 @@ def main():
     # est la valeur par defaut -- sans quoi un scan de plusieurs jours
     # deviendrait impossible a reprendre apres cette mise a jour.
     PARAM_DEFAULTS = {'sampling_threshold': 'off', 'sampling_budget': 100,
-                      'with_extensions': False, 'wilson': None, 'n_gen': 3}
+                      'with_extensions': False, 'wilson': None, 'n_gen': 3,
+                      'ext_exhaustif_max': 200000}
 
     if args.reset:
         for p in (progress_path, results_path):
@@ -638,11 +792,12 @@ def main():
         writer.open()
         worker_args = [(c, args.max_charge, args.n_random, args.seed,
                         args.sampling_threshold, args.sampling_budget,
-                        args.with_extensions,
+                        args.extensions,
                         _cibles_pour(c['num'], wilson, args.n_gen),
                         _ordres_pour(c['num'], wilson),
                         args.positive_only,
-                        args.exhaustif_max)
+                        args.exhaustif_max,
+                        args.ext_exhaustif_max)
                        for c in to_process]
 
         interrupted = {'flag': False}
@@ -658,6 +813,7 @@ def main():
         skipped = {}
         prefilter_tot = [0, 0, 0]
         degeneres_tot = [0]
+        ext_tot = [0, 0, 0, 0]
         pool = None
         try:
             if n_jobs == 1:
@@ -703,6 +859,10 @@ def main():
                     for _i in range(3):
                         prefilter_tot[_i] += pf[_i]
                 degeneres_tot[0] += result.get('degeneres', 0)
+                ex = result.get('extensions')
+                if ex:
+                    for _i in range(len(ext_tot)):
+                        ext_tot[_i] += ex[_i]
 
                 reason = result.get('skipped')
                 if reason:
@@ -753,6 +913,17 @@ def main():
                   f"{passes - non_cert} evaluees.")
             print(f"              {degeneres_tot[0]} monades degenerees rejetees "
                   f"(scindees : b_i = c_j, colonne nulle, ou rang de f < rank_C)")
+
+        if ext_tot[0]:
+            vus, passes, pente_ok, stables = ext_tot
+            print(f"\n  Extensions : {vus} vues, {passes} avec |chi(V)| a la "
+                  f"cible ({100.0*passes/max(1,vus):.3f} %),")
+            print(f"              {passes - pente_ok} ecartees par un "
+                  f"certificat d'instabilite de pente, {stables} retenues "
+                  f"apres Hoppe.")
+            print(f"              Rappel : `stable` = non elimine. Hoppe est "
+                  f"NECESSAIRE, pas suffisant, des que Pic(X) n'est pas de "
+                  f"rang 1.")
 
         if skipped:
             print(f"\n  CICYs ecartees pendant cette session "

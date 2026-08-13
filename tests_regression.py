@@ -1089,6 +1089,266 @@ def t_extension():
 
 
 # ======================================================================
+# 11 septies. Enumeration des extensions : monotonie en max_charge
+# ======================================================================
+
+@test("extensions enumerees : monotones en max_charge, la ou le tirage perd 97 %")
+def t_enumeration_extensions():
+    """
+    Le defaut mesure (§5.11) : `generate_extensions` echantillonnait, et
+    passer de max_charge 2 a 3 FAISAIT PERDRE 216 extensions sur 222, soit
+    97 %. Un generateur non monotone en son propre parametre de portee
+    interdit tout enonce d'ABSENCE -- « aucun fibre stable a max_charge 3 »
+    ne dit rien tant qu'on ignore si ce domaine contient celui de
+    max_charge 2.
+
+    ----------------------------------------------------------------------
+    Quatre references, dont une NEGATIVE
+    ----------------------------------------------------------------------
+    (a) COMPTAGE. `compte_extensions` compte les tuples ordonnes par
+        convolution, sans construire un seul tuple ; on le confronte a un
+        comptage par enumeration explicite ecrit ici, dans le test. Les
+        deux chemins n'ont en commun que l'enonce du domaine.
+
+    (b) MONOTONIE, la propriete visee. E(q) doit etre inclus dans E(q+1),
+        composant par composant du domaine. C'est vrai PAR CONSTRUCTION
+        pour une enumeration de boites emboitees -- le test verifie que
+        l'implementation realise bien cette construction.
+
+    (c) INCLUSION DU TIRAGE. Tout ce que l'ancien chemin produisait doit
+        se retrouver dans l'enumeration, sinon remplacer l'un par l'autre
+        PERDRAIT des candidats. C'est ce point qui autorise a passer de
+        « aucun survivant parmi ce qu'on a tire » a « aucun survivant sur
+        le domaine ».
+
+    (d) CONTROLE NEGATIF. Le tirage, lui, doit etre VU non monotone. Sans
+        ce volet, un test qui accepterait n'importe quel generateur --
+        y compris l'ancien -- passerait. Les deux exigences ensemble
+        n'admettent qu'un generateur qui enumere reellement.
+
+    Un cinquieme controle, trivial mais indispensable : l'enumeration ne
+    doit pas etre vide et doit croitre strictement. L'ensemble vide est
+    monotone et inclus dans tout ; il passerait (a), (b) et (c).
+    """
+    from itertools import product as iprod
+    from cy_landscape.core.extensions import (
+        compte_extensions, enumerer_extensions, _splits,
+        _echantillonner_extensions)
+
+    def cle(e):
+        return (tuple(sorted(tuple(v) for v in e.f1_charges)),
+                tuple(sorted(tuple(v) for v in e.f2_charges)))
+
+    def brut_ordonnes(m, rv, q):
+        """Comptage par enumeration explicite : reference independante."""
+        n = 0
+        boite = list(iprod(range(-q, q + 1), repeat=m))
+        for _rk1, _rk2 in _splits(rv):
+            for libres in iprod(boite, repeat=rv - 1):
+                last = [-sum(v[k] for v in libres) for k in range(m)]
+                if all(abs(x) <= q for x in last):
+                    n += 1
+        return n
+
+    def enum_valide(m, rv, q):
+        """Enumere en VALIDANT chaque objet : c1(V) = 0, rang, boite."""
+        out = set()
+        for e in enumerer_extensions(m, rv, q, plafond=10 ** 8):
+            assert e.c1_vanishes, (m, rv, q, "c1(V) != 0", e)
+            assert e.rank_V == rv, (m, rv, q, "rang", e.rank_V)
+            assert all(abs(x) <= q for v in e.f1_charges + e.f2_charges
+                       for x in v), (m, rv, q, "hors de la boite", e)
+            out.add(cle(e))
+        return out
+
+    # (a) le compteur par convolution contre un comptage par enumeration
+    n_comptages = 0
+    for m in (1, 2):
+        for rv in (3, 4, 5):
+            for q in ((1, 2) if rv <= 4 else (1,)):
+                a = compte_extensions(m, rv, q)
+                b = brut_ordonnes(m, rv, q)
+                assert a == b, (m, rv, q, "compte_extensions", a, "brut", b)
+                assert a > 0, (m, rv, q, "domaine vide")
+                n_comptages += 1
+
+    # (b) monotonie en max_charge, et croissance stricte
+    n_paires = n_objets = 0
+    for m in (1, 2):
+        for rv in (3, 4, 5):
+            qs = (1, 2, 3) if rv <= 4 else (1, 2)
+            E = {q: enum_valide(m, rv, q) for q in qs}
+            for q in qs:
+                assert E[q], (m, rv, q, "enumeration vide")
+                n_objets += len(E[q])
+            for q1, q2 in zip(qs, qs[1:]):
+                perdus = E[q1] - E[q2]
+                assert not perdus, (
+                    f"m={m} rk={rv} : {len(perdus)} extensions de max_charge "
+                    f"{q1} absentes de max_charge {q2} -- l'enumeration n'est "
+                    f"pas monotone", sorted(perdus)[:2])
+                assert len(E[q2]) > len(E[q1]), (m, rv, q1, q2,
+                                                 len(E[q1]), len(E[q2]))
+                n_paires += 1
+
+    # (c) tout tirage doit se retrouver dans l'enumeration
+    # (d) et le tirage, lui, doit PERDRE des extensions en passant de 2 a 3
+    n_tirages = perdus_tirage = total_tirage = 0
+    # (m, rank_V, q_bas, q_haut) -- m = 3 est teste a charge plus basse,
+    # l'enumeration y coutant (2q+1)^3 par vecteur.
+    for m, rv, qa, qb in ((2, 3, 2, 3), (2, 4, 2, 3), (3, 3, 1, 2)):
+        S = {}
+        for q in (qa, qb):
+            S[q] = {cle(e) for e in
+                    _echantillonner_extensions(m, rv, q, n_random=400)}
+            E = enum_valide(m, rv, q)
+            assert S[q], (m, rv, q, "tirage vide")
+            hors = S[q] - E
+            assert not hors, (
+                f"m={m} rk={rv} q={q} : {len(hors)} tirages hors de "
+                f"l'enumeration -- l'enumeration raterait des candidats",
+                sorted(hors)[:2])
+            n_tirages += len(S[q])
+        perdus_tirage += len(S[qa] - S[qb])
+        total_tirage += len(S[qa])
+    assert perdus_tirage > 0.5 * total_tirage, (
+        perdus_tirage, total_tirage,
+        "le tirage ne perd plus rien entre max_charge 2 et 3 : le controle "
+        "negatif ne mord plus, ce test passerait pour un generateur qui "
+        "echantillonne")
+
+    return (f"{n_comptages} comptages convolution == enumeration ; "
+            f"{n_paires} paires (q, q+1) sans perte ; {n_tirages} tirages "
+            f"tous retrouves ; le tirage, lui, perd {perdus_tirage}/"
+            f"{total_tirage} extensions d'un cran de max_charge au suivant")
+
+
+# ======================================================================
+# 11 octies. Pente : les sous-faisceaux destabilisants d'une extension
+# ======================================================================
+
+@test("pente : certificat exact, et un echec de recherche n'elimine jamais")
+def t_pente_extension():
+    """
+    Le critere de Hoppe « c1(V) = 0 => V stable <=> h0(w^p V) = 0 » suppose
+    Pic(X) de rang 1. Sur une CICY a m > 1 il reste NECESSAIRE sans etre
+    suffisant. Une extension, elle, exhibe ses sous-faisceaux -- F1, ses
+    sous-sommes, les preimages des sous-sommes de F2 -- donc la pente les
+    teste directement.
+
+    ----------------------------------------------------------------------
+    Le piege que ce test fige, et qui est la raison principale de son
+    existence
+    ----------------------------------------------------------------------
+    La premiere version du critere concluait « instable » quand la
+    recherche d'un temoin J echouait sur une grille [1,4]^m. Elle annoncait
+    635 extensions destabilisees sur 2 647. Ce chiffre ne mesurait que la
+    grille :
+
+        J_max        3      6      12     24
+        sans temoin  1748   1299   1042   925
+
+    Aucune saturation -- exactement le faux lieu de base du §5.4, ou la
+    mesure manquante etait la dimension de la source. Le volet (d) exige
+    donc qu'un budget insuffisant rende `None` et jamais `False`, sur un
+    cas REEL ou un temoin existe mais hors de portee d'une petite grille.
+
+    Quatre references :
+
+    (a) VALEUR CONNUE D'AVANCE. Le degre au point J = v vaut
+        sum_ijk d_ijk v_i v_j v_k, que Riemann-Roch relie a chi(O(v)) par
+        24*chi = 4*cube + 2*(c2.v). On confronte l'einsum a
+        `ChiCalculator`, qui n'emprunte pas le meme chemin.
+
+    (b) CONTROLE POSITIF. Un sous-faisceau a c1 <= 0 non nul doit trouver
+        un temoin. Sans ce volet, une fonction refusant tout passerait.
+
+    (c) CONTROLE NEGATIF CONSTRUIT. Un sous-faisceau a c1 >= 0 non nul doit
+        etre certifie instable, sur toute CICY. Sans ce volet, une fonction
+        acceptant tout passerait.
+
+    (d) NON-ELIMINATION SUR ECHEC DE RECHERCHE. Voir ci-dessus.
+    """
+    from cy_landscape.core.extensions import (
+        ExtensionBundle, pente_extension, certificat_instabilite,
+        _sous_faisceaux, degre, ContextePente)
+    from cy_landscape.core.intersection import (compute_intersection_numbers,
+                                                compute_c2_tangent)
+    from cy_landscape.core.chi_exact import ChiCalculator
+
+    # (a) degre au point J = v contre Riemann-Roch
+    n_rr = 0
+    for c, cfg in _cy3()[:6]:
+        amb = c['ambient']
+        m = len(amb)
+        d = compute_intersection_numbers(amb, cfg)
+        c2 = compute_c2_tangent(amb, cfg, d)
+        cal = ChiCalculator(amb, d, c2)
+        for v in ([1] + [0] * (m - 1), [1] * m, [2] + [-1] * (m - 1)):
+            cube = degre(d, v, v)
+            c2v = sum(int(round(2 * float(x))) * y for x, y in zip(c2, v))
+            assert 4 * cube + c2v == 24 * cal.line(v), \
+                (amb, v, cube, cal.line(v))
+            n_rr += 1
+    assert n_rr >= 15, n_rr
+
+    # (b) et (c) : deux verdicts OPPOSES construits sur les memes CICYs
+    n_pos = n_neg = 0
+    for c, cfg in _cy3()[:6]:
+        amb = c['ambient']
+        m = len(amb)
+        if m < 2:
+            continue
+        d = compute_intersection_numbers(amb, cfg)
+        ctx = ContextePente(d, m)
+
+        # (c) F1 = O(a) avec a >= 0 non nul : deg_J(a) = sum_i a_i D_i(J)
+        #     avec D_i(J) >= 0, donc >= 0 pour TOUTE classe de Kahler.
+        a_pos = [1] + [0] * (m - 1)
+        a_neg = [-x for x in a_pos]
+        ext_bad = ExtensionBundle([a_pos], [a_neg])
+        r_bad = pente_extension(ext_bad, ctx=ctx)
+        assert r_bad['stable_possible'] is False, (amb, r_bad['etat'])
+        assert r_bad['certificat'] is not None, amb
+        n_neg += 1
+
+        # (b) le meme, retourne : F1 = O(-a). Aucun certificat ne doit
+        #     s'appliquer, et un temoin doit exister.
+        ext_ok = ExtensionBundle([a_neg], [a_pos])
+        assert certificat_instabilite(_sous_faisceaux(ext_ok)) is None, amb
+        r_ok = pente_extension(ext_ok, ctx=ctx)
+        assert r_ok['stable_possible'] is True, (amb, r_ok['etat'])
+        assert r_ok['temoin'] is not None, amb
+        # le temoin doit REELLEMENT verifier la condition
+        for v in _sous_faisceaux(ext_ok):
+            assert degre(d, v, r_ok['temoin']) < 0, (amb, v, r_ok['temoin'])
+        n_pos += 1
+    assert n_pos >= 3 and n_neg >= 3, (n_pos, n_neg)
+
+    # (d) LE PIEGE. Cas reel : CICY 14, un temoin existe (J = [1,22,20]),
+    #     hors de portee d'une grille [1,2]^3. Le verdict a budget
+    #     insuffisant doit etre None -- surtout pas False.
+    par_num = {c['num']: (c, cfg) for c, cfg in _cy3()}
+    assert 14 in par_num, "CICY 14 absente des donnees"
+    c14, cfg14 = par_num[14]
+    d14 = compute_intersection_numbers(c14['ambient'], cfg14)
+    ext14 = ExtensionBundle([[-2, -1, 2]], [[1, -1, 0], [1, 2, -2]])
+    etroit = pente_extension(ext14, d14, J_max=2)
+    large = pente_extension(ext14, d14, J_max=24)
+    assert large['stable_possible'] is True, large['etat']
+    assert etroit['stable_possible'] is None, (
+        "un echec de recherche de temoin a ete converti en elimination : "
+        "c'est l'erreur du §5.4, et elle annoncait 635 fibres destabilises "
+        "qui n'existaient pas", etroit['etat'])
+    assert etroit['certificat'] is None and large['certificat'] is None
+
+    return (f"{n_rr} degres au point J=v == Riemann-Roch ; "
+            f"{n_neg} certificats exacts sur c1 >= 0, {n_pos} temoins sur "
+            f"c1 <= 0 ; sur #14 un temoin hors grille rend `None`, jamais "
+            f"`False` (temoin large : {large['temoin']})")
+
+
+# ======================================================================
 # 12. Ordre projectif et racines n-iemes
 # ======================================================================
 

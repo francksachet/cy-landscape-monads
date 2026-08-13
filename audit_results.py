@@ -101,11 +101,20 @@ def audit_record(r, seen_keys, n_gen=3):
 
     b = r.get('b_charges') or []
     c = r.get('c_charges') or []
-    coh = r.get('cohomology') or [0, 0, 0, 0]
+    f1 = r.get('f1_charges') or []
+    f2 = r.get('f2_charges') or []
+    # `cohomology` vaut None sur les extensions dont h1 n'est pas DETERMINE
+    # par les bornes. On ne le remplace pas par [0,0,0,0] : ce serait
+    # signaler h0/h3 non nuls et un index faux sur une valeur inexistante.
+    coh = r.get('cohomology')
 
     if len(b) and len(c) and (len(b) - len(c)) != r.get('rank_V'):
         flags.append('rank_mismatch')
-    if len(coh) >= 4:
+    # Meme controle pour les extensions : rk(V) = rk(F1) + rk(F2). C'est
+    # lui qui avait revele le defaut 4.7 (1571 entrees sur 1571).
+    if len(f1) and len(f2) and (len(f1) + len(f2)) != r.get('rank_V'):
+        flags.append('rank_mismatch')
+    if coh and len(coh) >= 4:
         if coh[0] != 0:
             flags.append('h0_nonzero')
         if coh[3] != 0:
@@ -118,9 +127,12 @@ def audit_record(r, seen_keys, n_gen=3):
     if r.get('type') != 'extension' and len(c) >= 2:
         warns.append('wedge2_heuristique')
 
-    key = (r.get('cicy'),
-           tuple(tuple(x) for x in b),
-           tuple(tuple(x) for x in c))
+    # Cle d'identite : (B, C) pour une monade, (F1, F2) pour une extension.
+    # Sans le repli sur F1/F2, toutes les extensions d'une meme CICY
+    # partageraient la cle vide et seraient signalees doublons.
+    key = (r.get('cicy'), r.get('type'),
+           tuple(tuple(x) for x in (b or f1)),
+           tuple(tuple(x) for x in (c or f2)))
     if key in seen_keys:
         warns.append('doublon')
     seen_keys.add(key)

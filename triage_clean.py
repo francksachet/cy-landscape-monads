@@ -86,9 +86,18 @@ def main():
                 rs.append(json.loads(line))
 
     for r in rs:
-        h = r.get('cohomology') or [0, 0, 0, 0]
-        r['n_anti'] = min(h[1], h[2])          # paires vectorielles reelles
-        r['higgs_fiable'] = 'wedge2_heuristique' not in (r.get('warnings') or [])
+        # `cohomology` vaut None quand h1 n'est pas determine (extensions) :
+        # n_anti est alors INCONNU, et le noter 0 le confondrait avec un
+        # candidat « propre ». C'est exactement le piege du §4.8.
+        h = r.get('cohomology')
+        r['n_anti'] = min(h[1], h[2]) if h else None
+        # `higgs_certifie = False` = le nombre de Higgs n'a PAS ete calcule
+        # (branche extension : H1(w^2 V) n'est pas sur ce chemin) ou n'est
+        # pas determine par les bornes. Un 0 de remplissage lu comme « pas
+        # de Higgs » serait le meme piege que les exotiques structurellement
+        # nuls du §4.8. Champ absent = ancien scan, regle inchangee.
+        r['higgs_fiable'] = ('wedge2_heuristique' not in (r.get('warnings') or [])
+                             and r.get('higgs_certifie') is not False)
 
     print(f"\n{'='*70}")
     print(f"  TRIAGE DE {src}   ({len(rs)} candidats)")
@@ -114,19 +123,26 @@ def main():
     print(f"\n  Paires vectorielles n_anti = min(h1,h2) "
           f"-- 0 = spectre reellement propre :")
     dist = Counter(r['n_anti'] for r in rs)
-    for k in sorted(dist):
-        marque = "   <<< propre" if k == 0 else ""
-        print(f"    n_anti = {k:<3} {dist[k]:>6}{marque}")
+    # `None` = h1 non determine par les bornes : ni propre, ni impur.
+    for k in sorted(dist, key=lambda x: (x is None, x)):
+        marque = "   <<< propre" if k == 0 else (
+            "   (h1 non determine)" if k is None else "")
+        print(f"    n_anti = {str(k):<3} {dist[k]:>6}{marque}")
 
     print(f"\n  Signatures de cohomologie les plus frequentes :")
-    for k, v in Counter(tuple(r['cohomology']) for r in rs).most_common(8):
-        print(f"    {str(list(k)):<18} {v:>6}")
+    for k, v in Counter(tuple(r['cohomology']) if r.get('cohomology')
+                        else None for r in rs).most_common(8):
+        print(f"    {(str(list(k)) if k else 'non determine'):<18} {v:>6}")
 
     # Familles : meme fibre (memes charges) reapparaissant sur plusieurs CICYs
     fam = defaultdict(set)
     for r in rs:
-        sig = (tuple(tuple(b) for b in r['b_charges']),
-               tuple(tuple(c) for c in r['c_charges']))
+        # (B, C) pour une monade, (F1, F2) pour une extension.
+        sig = (r.get('type'),
+               tuple(tuple(b) for b in (r.get('b_charges')
+                                        or r.get('f1_charges') or [])),
+               tuple(tuple(c) for c in (r.get('c_charges')
+                                        or r.get('f2_charges') or [])))
         fam[sig].add(r['cicy'])
     multi = {k: v for k, v in fam.items() if len(v) > 1}
     print(f"\n  Fibres distincts (par charges)      : {len(fam)}")
@@ -151,7 +167,8 @@ def main():
         print(f"  Ce n'est pas redhibitoire -- ces paires peuvent devenir")
         print(f"  massives -- mais aucun modele du lot n'a le spectre propre")
         print(f"  vise au depart.")
-        pool = sorted(rs, key=lambda r: (r['n_anti'],
+        pool = sorted(rs, key=lambda r: (r['n_anti'] is None,
+                                         r['n_anti'] or 0,
                                          0 if r.get('higgs', 0) >= 1 else 1,
                                          r.get('higgs', 0)))
         entete = "Meilleurs disponibles (n_anti croissant)"
@@ -165,13 +182,14 @@ def main():
           f"{'H':>4} {'H fiable':>9} {'cohomologie':>16}")
     for r in pool[:args.top]:
         print(f"    {r['cicy']:>6} {r['type']:<10} {r['gauge']:>7} {r['rank_V']:>2} "
-              f"{r['n_anti']:>6} {r.get('higgs',0):>4} "
+              f"{str(r['n_anti']):>6} {r.get('higgs',0):>4} "
               f"{'oui' if r['higgs_fiable'] else 'non':>9} "
               f"{str(r['cohomology']):>16}")
 
     out = os.path.join(args.output_dir, 'results_ranked.jsonl')
     with open(out, 'w', encoding='utf-8') as f:
-        for r in sorted(rs, key=lambda r: (r['n_anti'],
+        for r in sorted(rs, key=lambda r: (r['n_anti'] is None,
+                                           r['n_anti'] or 0,
                                            0 if r.get('higgs', 0) >= 1 else 1)):
             f.write(json.dumps(r) + '\n')
     print(f"\n  Ecrit : {out}")

@@ -1,6 +1,24 @@
 """
 hoppe_fast.py -- Critere de Hoppe avec sortie anticipee et cache.
 
+--------------------------------------------------------------------------
+PORTEE DU VERDICT -- a lire avant d'interpreter un `stable: True`
+--------------------------------------------------------------------------
+Le critere s'enonce : pour c1(V) = 0, V est stable si et seulement si
+h0(wedge^p V) = 0 pour p = 1..rk-1. Cette EQUIVALENCE suppose Pic(X) de
+rang 1. Sur une CICY a m > 1 facteurs projectifs, la stabilite de pente
+depend de la classe de Kahler J choisie, et la condition ci-dessus reste
+NECESSAIRE sans etre suffisante : elle ne voit pas la polarisation.
+
+`stable: True` doit donc se lire « non elimine par Hoppe », et non
+« stable ». C'est un filtre, pas un certificat.
+
+Pour un fibre d'extension, ou la construction exhibe des sous-faisceaux
+explicites, `extensions.pente_extension` teste ce que Hoppe ne voit pas et
+elimine sur certificat -- 105 des 2 647 extensions declarees Hoppe-stables
+d'un scan de controle. Pour une monade, aucun sous-faisceau ne se presente
+a bon compte : la reserve reste entiere et non instruite.
+
 Optimisations par rapport a stability_full.py :
 1. Teste le rang 1 d'abord (le moins cher) -> sortie immediate si echec
 2. Teste un seul H ample (le plus simple) avant les combinaisons

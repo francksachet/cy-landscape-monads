@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 25 tests.
+> non une propriété des candidats, et la suite compte 27 tests.
 
 ---
 
@@ -109,13 +109,16 @@ cy_landscape/
     │                          tout p (donc Hoppe complet, h³ inclus),
     │                          certificat de surjectivité,
     │                          décomposition de H¹(V) et H¹(∧²V) sous Γ
-    ├── extensions.py          fibré d'extension : χ et rang corrects,       [~]
-    │                          Hoppe par bornes sur les quotients gradués
+    ├── extensions.py          fibré d'extension : χ et rang corrects,       [+]
+    │                          Hoppe par bornes sur les quotients gradués,
+    │                          domaine ÉNUMÉRÉ (monotone en max_charge),
+    │                          cohomologie par bornes rigoureuses,
+    │                          pente : certificat d'instabilité exact
     ├── gamma_action.py        action de Γ sur les sections (obsolète, §5.2)
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        25 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        27 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -125,7 +128,8 @@ racine/
 └── equivariance_f.py          chaîne complète au niveau des polynômes       [+]
 ```
 
-`[+]` = ajouté lors de la session « équivariance ». `[~]` = réparé (§5.10).
+`[+]` = ajouté lors de la session « équivariance », ou réparé depuis (§5.10,
+§5.12).
 
 ---
 
@@ -214,7 +218,8 @@ vérifient pas que f est surjective, donc pas que V est un fibré. Voir §5.4 et
 Le pipeline construisait une pseudo-monade B = F₁⊕F₂, C = F₂. Le noyau est de
 rang rank(F₁), alors que le fibré d'extension est de rang rank(F₁)+rank(F₂).
 Mesure sur `test_v3` : **1 571 entrées sur 1 571** en incohérence de rang.
-Désactivée par défaut ; `--with-extensions` la réactive.
+Désactivée par défaut à l'époque. Le chemin correct est décrit au §5.10 ;
+l'option qui réactivait ce chemin cassé n'existe plus (§5.12).
 
 ### 4.8 Compteurs de spectre structurellement nuls
 
@@ -642,10 +647,8 @@ monade ne se laisse encadrer que grossièrement.
 Le test `Ext¹(F2,F1) ≠ 0` élimine par ailleurs les cas où seule l'extension
 scindée existe — et une somme directe n'est jamais stable.
 
-**Ce qui reste avant de scanner** : énumérer `generate_extensions` au lieu
-d'échantillonner (§5.11), un test de régression sur sa monotonie, le branchement
-dans `process_cicy`, et le renommage de `--with-extensions` pour que l'ancien
-chemin cassé cesse d'être atteignable.
+**Ces quatre points sont faits** — énumération, test de régression, branchement
+dans `process_cicy`, renommage de l'option. Voir §5.12.
 
 ### 5.11 Audits de générateurs — trois défauts, un motif commun
 
@@ -666,10 +669,10 @@ candidats sur 42**. Corrigé par un RNG dérivé propre à la branche.
 
 **`generate_extensions` ne l'était pas non plus, et bien plus gravement.**
 Passer de 200 à 800 tirages perdait 40 extensions au rang 4 ; passer de
-`max_charge` 2 à 3 en perdait **216 sur 222**, soit 97 %. Le premier point est
-corrigé (RNG dérivé par couple (rk1, rk2)) ; **le second ne l'est pas** et ne
-peut pas l'être par un réglage de RNG — changer les bornes du tirage change la
-suite tirée. Seule une énumération le règlerait.
+`max_charge` 2 à 3 en perdait **216 sur 222**, soit 97 %. Le premier point a été
+corrigé par un RNG dérivé par couple (rk1, rk2) ; le second ne pouvait pas
+l'être par un réglage de RNG — changer les bornes du tirage change la suite
+tirée. Il fallait énumérer : c'est fait (§5.12).
 
 **Deux pièges d'outillage rencontrés au passage.** `enumerer_positive_B`
 matérialisait toute l'énumération en mémoire : `MemoryError` après 153 min de
@@ -679,6 +682,224 @@ NOMBRE de B, pas la mémoire. Et `equivariance_f.py` n'écrivait que les lignes
 alors que 26 candidats en portaient un, écartés en amont pour une raison que le
 fichier ne contenait pas. Toutes les lignes sont désormais persistées.
 
+
+### 5.12 Branche `extension` — énumérée, testée, branchée
+
+Les quatre points laissés ouverts au §5.10 sont traités.
+
+**1. `generate_extensions` énumère.** Le domaine est le produit de boîtes
+[−max_charge, max_charge]^m sur les charges de F1 et de F2, la dernière étant
+fixée par c₁(V) = 0. `enumerer_extensions` le parcourt en entier ;
+`compte_extensions` en donne le cardinal ordonné **par convolution, sans rien
+construire**, ce qui permet de refuser d'énumérer avant d'essayer.
+
+La monotonie en `max_charge` devient vraie **par construction** — des boîtes
+emboîtées — et non par chance de RNG. Mesure : sur tous les couples testés,
+E(q) ⊂ E(q+1) sans une seule perte, là où le tirage en perd 87 % en moyenne.
+
+Trois points de mise en œuvre valent d'être notés :
+
+- **Aucun ensemble de déduplication n'est conservé.** Les multiensembles sont
+  produits à indices non décroissants, donc chacun une fois. C'est exactement
+  le piège qui avait causé le `MemoryError` de `enumerer_positive_B` (§5.11) :
+  là-bas le plafond bornait le nombre de B, pas la mémoire.
+- **Élagage exact** dans la recherche de F2 à somme prescrite : les `t` vecteurs
+  restants contribuent au plus `t·q` par composante, donc une cible hors de
+  cette portée coupe la branche sans perte.
+- **Le domaine du tirage a été aligné.** Il acceptait la dernière charge
+  jusqu'à `max_charge + 2` alors que les autres étaient tirées dans
+  [−max_charge, max_charge] — artefact de la construction « tirer n−1 vecteurs,
+  déduire le dernier », sans justification géométrique, et qui faisait dépendre
+  le domaine de l'**ordre** des facteurs de F2. Sans cet alignement, l'inclusion
+  « tirage ⊂ énumération » n'aurait pas été testable.
+
+Taille du domaine, en tuples ordonnés :
+
+| | max_charge 1 | 2 | 3 |
+|---|---|---|---|
+| m = 2, rang 4 | 722 | 14 450 | 106 722 |
+| m = 3, rang 4 | 13 718 | 1 228 250 | 24 652 782 |
+| m = 3, rang 5 | 265 302 | 1,1·10⁸ | 6,1·10⁹ |
+
+D'où le plafond `--ext-exhaustif-max` (défaut 200 000, comme
+`enumerer_positive_B`) : au-delà, retour à l'échantillonnage, et le résultat
+porte le champ `ext_mode = 'echantillonne'`. **Sans ce champ un résultat
+d'absence serait ininterprétable.**
+
+**2. Le test de régression (26ᵉ test).** Quatre références, dont une négative :
+
+| volet | référence |
+|---|---|
+| comptage | `compte_extensions` (convolution, ne construit rien) contre un comptage par énumération explicite écrit dans le test |
+| monotonie | E(q) ⊂ E(q+1), la propriété visée |
+| inclusion | tout tirage se retrouve dans l'énumération — c'est ce point qui autorise « aucun survivant sur le domaine » |
+| **contrôle négatif** | le tirage, lui, doit être **vu** non monotone : il perd 245 extensions sur 281 d'un cran au suivant |
+
+Vérifié en cassant, dans les deux sens : remplacer l'énumération par
+l'échantillonnage fait tomber le volet « monotonie » (40 pertes dès m = 2,
+rang 3) ; rendre le tirage monotone fait tomber le contrôle négatif. Un test qui
+n'exigerait que la monotonie passerait pour un générateur qui ne produit rien.
+
+**3. Branchement dans `process_cicy`.** La branche a désormais sa propre boucle
+— un fibré d'extension n'est pas un noyau de monade, et rien du chemin des
+monades ne s'y applique. Filtres, du moins cher au plus cher :
+
+1. χ(V) = χ(F1) + χ(F2), arithmétique pure, **exact** ;
+2. Ext¹(F2, F1) ≠ 0, sinon seule l'extension scindée existe ;
+3. Hoppe par borne supérieure sur les quotients gradués — **suffisant, jamais
+   de faux positif** ; `indéterminé` n'est jamais inscrit ;
+4. cohomologie par **bornes rigoureuses**.
+
+Le point 4 méritait d'être écrit : `compute_extension_cohomology` pose les
+morphismes de liaison « de rang maximal pour une extension générique », soit
+exactement l'hypothèse qui avait faussé §4.3 et §4.4. `cohomology_extension_ex`
+ne la fait pas. Avec h⁰(V) = h³(V) = 0 — conséquences de la stabilité, déjà
+prouvée à l'étape 3 — la suite exacte longue donne
+
+```
+h¹(V) = h¹(F1) + h¹(F2) − r₁,     r₁ = rg( H¹(F2) → H²(F1) ) inconnu
+h²(V) = h¹(V) + χ(V)
+```
+
+d'où un intervalle pour h¹, déterminé exactement quand h¹(F2) = 0 ou
+h²(F1) = 0. `n_gen = |χ(V)|` reste **légitime** puisque la stabilité est
+prouvée ; `cohomology` vaut `None` quand h¹ n'est pas déterminé, et non
+[0,0,0,0] — un zéro de remplissage serait relu comme n_anti = 0, c'est-à-dire
+comme un spectre propre, le piège du §4.8. Quand les quatre degrés sont
+certifiés, χ par Riemann-Roch est confronté à la somme alternée des h^i.
+
+**4. `--with-extensions` n'existe plus.** L'option est interceptée et le
+programme s'arrête avec le motif : elle activait le chemin par pseudo-monade du
+défaut 4.7. Un ancien script l'aurait rappelée en silence. Le nouveau nom est
+`--extensions`.
+
+**Trois effets de bord trouvés en branchant**, tous du même genre — un champ
+absent relu comme un zéro :
+
+- `deduplicate_results` indexait sur `(cicy, type, b_charges, c_charges)`.
+  Les extensions n'ont pas de (B, C) : **2 647 candidats se repliaient sur 132**,
+  silencieusement. La clé porte maintenant sur (F1, F2) quand (B, C) est vide.
+  Même correction dans `audit_results.py` et `triage_clean.py`.
+- `audit_results` ne vérifiait le rang que pour les monades. Le contrôle
+  rk(V) = rk(F1) + rk(F2) est ajouté — c'est lui qui avait révélé le défaut 4.7.
+- `triage_clean` lisait `higgs_fiable` de la seule absence d'avertissement
+  `wedge2_heuristique`. Or H¹(∧²V) n'est pas calculé sur cette branche : le
+  `higgs = 0` du résultat est un remplissage. Le champ `higgs_certifie` est
+  désormais respecté.
+
+**Premier scan de contrôle** (244 CICYs à m ≤ 3, `--max-charge 2`, 1,3 min) :
+837 216 extensions énumérées, 30 021 à |χ(V)| = 3 (3,6 %), **2 647
+Hoppe-stables** — contre 6 monades sur le même domaine. Toutes en mode
+`exhaustif`, toutes de rang 3, donc E₆ ; h¹ déterminé dans 2 232 cas. Le taux de
+passage est deux ordres de grandeur au-dessus de celui des monades, ce qui rend
+la branche exploitable — et rend d'autant plus nécessaire un critère de tri
+au-delà de Hoppe.
+
+**Ce qui reste sur cette branche** : H¹(∧²V), donc le compte de Higgs et les
+exotiques ; `verify_hoppe.py` ignore toujours les extensions
+(`extension_ignoree`) ; et la chaîne d'équivariance (`equivariance.py`,
+`equivariance_f.py`) ne lit que des monades — c'est le prolongement naturel,
+puisque c'est elle qui a départagé les candidats du §2.
+
+
+### 5.13 Pente — ce que le critère de Hoppe ne voit pas
+
+**Une réserve de principe, qui n'avait pas été énoncée.** Le critère de Hoppe
+s'écrit « c₁(V) = 0 ⟹ V stable ⟺ h⁰(∧^p V) = 0 pour p = 1..rk−1 ». Cette
+**équivalence** suppose Pic(X) de rang 1. Sur une CICY à m > 1 facteurs, la
+stabilité de pente dépend de la classe de Kähler J, et la condition reste
+**nécessaire sans être suffisante** : elle est aveugle à la polarisation.
+
+`stable: True` se lit donc « non éliminé par Hoppe », et non « stable ». Cela
+vaut pour `hoppe_fast` et donc pour tout le catalogue de monades. La différence
+avec les extensions est qu'une extension **exhibe** ses sous-faisceaux : dans
+0 → F1 → V → F2 → 0, chaque sous-somme de F1 est un sous-faisceau de V, et la
+préimage de toute sous-somme propre de F2 en est un autre. Comme μ(V) = 0, la
+stabilité exige deg_J(W) < 0 pour chacun — de l'arithmétique pure sur les d_ijk.
+Pour une monade, aucun sous-faisceau ne se présente à ce prix : **la réserve y
+reste entière et non instruite.**
+
+#### Le piège, et le chiffre qui n'existe pas
+
+Première version : « aucun J de la grille [1,4]^m ne rend tous les degrés
+négatifs ⟹ instable ». Elle annonçait **635 extensions déstabilisées sur
+2 647, soit 24 %**. Ce chiffre est faux, et il ne mesurait que la grille :
+
+| J_max | 3 | 6 | 12 | 24 |
+|---|---|---|---|---|
+| sans témoin | 1 748 | 1 299 | 1 042 | 925 |
+
+Aucune saturation. C'est mot pour mot le faux lieu de base du §5.4, où la mesure
+manquante était la dimension de la source ; ici c'est la saturation de la
+recherche. **Un échec de recherche sur une grille finie ne démontre rien** et ne
+doit jamais être inscrit comme une élimination.
+
+#### Ce qui est démontré, et comment
+
+L'élimination passe par un **certificat**, pas par une recherche. Avec
+D_i(J) = Σ_jk d_ijk J_j J_k, on a deg_J(v) = Σ_i v_i·D_i(J). Les d_ijk d'une
+CICY dans un produit d'espaces projectifs sont positifs ou nuls — **vérifié sur
+les 7 890 entrées de `cicylist.txt`**, avec D_i(J) ≥ 0 et D_i(1,…,1) > 0
+partout. Donc si des coefficients y_k ≥ 0 vérifient Σ_k y_k v_k ≥ 0 composante
+par composante, alors
+
+```
+Σ_k y_k · deg_J(v_k) = (Σ_k y_k v_k) · D(J) ≥ 0
+```
+
+et l'un au moins des deg_J(v_k) est ≥ 0 — **pour toute classe de Kähler de
+l'orthant**. Il suffit d'exhiber le y. C'est le sens facile du théorème de
+transposition de Motzkin.
+
+**Réserve** : la réciproque — l'absence d'un tel y prouverait l'existence d'un
+p ≥ 0 avec v·p < 0 partout — demanderait un solveur de programmation linéaire,
+et le dépôt ne dépend que de numpy. On n'explore donc que les y entiers à petits
+coefficients. Mesure de saturation, elle : 105 certificats à taille ≤ 2, et
+**pas un de plus** en montant à taille ≤ 3 et coefficients ≤ 3. La granularité
+n'est pas le facteur limitant sur ce lot.
+
+Trois issues, jamais confondues :
+
+| verdict | sens |
+|---|---|
+| `False` | instable, **démontré** par certificat |
+| `True` | un témoin J rend tous ces degrés négatifs — condition **nécessaire** satisfaite, pas une preuve de stabilité |
+| `None` | ni certificat ni témoin. **N'élimine pas** |
+
+#### Effet mesuré
+
+Le test est branché **après le préfiltre χ et avant toute cohomologie** — il ne
+coûte qu'un produit matriciel, les D_i(J) étant mis en cache par CICY (0,8 ms
+par extension, contre plusieurs Koszul pour Hoppe).
+
+Sur le scan de contrôle (244 CICYs à m ≤ 3, `--max-charge 2`) :
+
+| | |
+|---|---|
+| extensions énumérées | 837 216 |
+| passant \|χ(V)\| = 3 | 30 021 |
+| **écartées par certificat d'instabilité** | **14 936 (50 %)** |
+| retenues après Hoppe | 2 544 |
+
+Et parmi celles que Hoppe seul laissait passer, **105 sont démontrées
+instables** — 4,0 % du lot précédent, pas les 24 % annoncés par la version
+fautive.
+
+#### Le 27ᵉ test
+
+Quatre volets, dont deux opposés et un qui fige précisément l'erreur ci-dessus :
+
+| volet | référence |
+|---|---|
+| valeur connue d'avance | deg au point J = v, confronté à Riemann-Roch via `ChiCalculator` (24·χ = 4·cube + 2·c₂·v) |
+| contrôle positif | un sous-faisceau à c₁ ≤ 0 doit trouver un témoin |
+| contrôle négatif construit | un sous-faisceau à c₁ ≥ 0 doit être **certifié** instable, sur toute CICY |
+| **non-élimination sur échec** | sur `#14`, un témoin existe (J trouvé hors d'une grille [1,2]³) : le verdict à budget insuffisant doit être `None`, jamais `False` |
+
+Vérifié en cassant, de trois façons : convertir les `None` en `False` fait
+tomber le quatrième volet ; renvoyer toujours `True` fait tomber le contrôle
+négatif ; renvoyer toujours `False` fait tomber le contrôle positif.
+
 ---
 
 ## 6. Ce qui reste faux ou absent
@@ -687,8 +908,10 @@ fichier ne contenait pas. Toutes les lignes sont désormais persistées.
 |---|---|
 | voie « gros Γ » | **fermée, mesurée.** Le verrou n'était ni la certification Koszul ni les charges négatives, mais la ligne `len(c_charges) != 1` de `domaine_valide` : les 26 candidats à groupe d'ordre compatible sont tous E₆ à rank_C = 2, dont 24 satisfont tout le reste. Contrainte levée (`rank_c_max=None`, défaut 1 pour ne pas casser `hoppe_fast`) puis test relancé : **574 couples, 544 tués par h⁰(V) équivariant, 28 sans f équivariant, 0 survivant**. Aucun candidat à Γ d'ordre ≥ 4 ne passe la stabilité restreinte. Étendre ∧^p V et la surjectivité à rank_C = 2 est donc **inutile** : il n'y aurait rien à leur donner à manger |
 | surjectivité au rang 5 | **bloquant ensuite** : les 40 candidats du scan « gros Γ » sont tous de rang 5, précisément le régime où le certificat J_d = R_d n'est pas atteignable (§5.4). Le critère de Hoppe les départagera, mais le verdict final restera `indéterminé` tant que ce point n'est pas traité |
-| **branche extension** | chemin de calcul correct et testé (§5.10), taux de conclusion ~36 %. **Restent** : énumérer `generate_extensions` (non monotone en `max_charge`, §5.11), un test de régression sur cette monotonie, le branchement dans `process_cicy`, le renommage de `--with-extensions` |
-| énumération de `generate_extensions` | **à faire** — c'est elle qui donnerait des énoncés démontrés plutôt que des sondages. L'espace est un produit de boîtes avec la dernière charge fixée par c₁(V) = 0, donc énumérable pour m et rk petits |
+| **branche extension** | chemin correct, **énuméré, testé, branché**, avec certificat de pente (§5.10, §5.12, §5.13). **Restent** : H¹(∧²V) donc le compte de Higgs et les exotiques ; `verify_hoppe.py` ignore les extensions ; la chaîne d'équivariance ne lit que des monades |
+| **portée du verdict de Hoppe** | `stable: True` signifie « non éliminé », pas « stable » : l'équivalence de Hoppe suppose Pic(X) de rang 1 (§5.13). Sur les extensions, `pente_extension` comble une partie du trou et démontre 105 instabilités sur un lot de 2 647. **Sur les monades, la réserve est entière et non instruite** — y compris pour les deux candidats du §2 |
+| décision exacte de la pente | le certificat de Motzkin démontre l'instabilité quand il aboutit ; **la réciproque demanderait un solveur de programmation linéaire**, absent du dépôt (numpy seul). Les verdicts `None` ne sont donc ni des éliminations ni des validations |
+| énumération de `generate_extensions` | **faite** (§5.12) : monotone en `max_charge` par construction, avec plafond `--ext-exhaustif-max` et champ `ext_mode` qui dit, résultat par résultat, si l'énoncé est démontré sur le domaine ou seulement sondé |
 | ligne de Wilson explicite | **non construite** — le §5.8 est de la théorie des groupes appliquée aux nombres calculés ; le code ne manipule aucune ligne de Wilson. La corrélation entre Γ et la ligne de Wilson, qui décide de 2 ou 6 bidoublets de Higgs, reste un intrant |
 | Modèle Standard hors de portée avec ℤ₂ | limitation de **principe** : les lignes de Wilson préservent le rang, SO(10) est de rang 5 et le MS de rang 4 (§5.8). Ces deux candidats plafonnent à Pati–Salam ou SU(5) flipped |
 
@@ -741,7 +964,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 25 tests, ~4 min. À lancer après chaque modification,
+**`tests_regression.py` — 27 tests, ~1 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -764,6 +987,8 @@ Huit ajouts de la session « équivariance » :
 | spectre sous Γ | **valeur connue d'avance** : Γ libre ⇒ partie invariante = 6/2 = 3, donc 3 + 3 ; + additivité des multiplicités ; + β∘α = 0 et h⁰(∧²V) concordant par deux chemins | oui : ignorer l'image de f casse d'abord le contrôle d'additivité |
 | surjectivité de f | contrôle **négatif construit** : un f à facteur commun a un zéro commun, le critère doit refuser ; + λ=+1 certifie et λ=−1 non sur `#6890` | oui : une fonction renvoyant toujours `True` échoue |
 | ordre projectif | racines n-ièmes construites comme puissances, comptage = pgcd(n, p−1) | oui : l'ancienne `racines_niemes` rendait la liste vide sur 7³ = 343 |
+| pente des sous-faisceaux | degré au point J = v contre Riemann-Roch ; **deux verdicts opposés construits** ; et un cas réel où un témoin existe hors grille, qui doit rendre `None` et non `False` | oui, de trois façons : convertir les `None` en `False`, renvoyer toujours `True`, renvoyer toujours `False` |
+| extensions énumérées | comptage par convolution contre comptage par énumération ; **contrôle négatif construit** : le tirage doit être vu perdre 245/281 extensions d'un cran de `max_charge` au suivant | oui, dans les deux sens : revenir au tirage casse la monotonie ; rendre le tirage monotone casse le contrôle négatif |
 
 Trois d'entre eux figent **deux verdicts opposés**, et trois confrontent le code à
 une valeur connue d'avance : 125 pour la quintique, 1 pour det V = O, 3 + 3 pour
@@ -807,6 +1032,10 @@ python -m cy_landscape.main_optimized cicylist.txt -j 7 --output scan_wilson2 --
 python -m cy_landscape.main_optimized cicylist.txt --max-ps 6 -j 7 --output scan --reset \
        --max-charge 5 --n-random 3000
 
+# scan avec la branche extension (chemin propre, domaine enumere)
+python -m cy_landscape.main_optimized cicylist.txt --max-ps 3 -j 7 \
+       --output scan_ext --reset --extensions --max-charge 2 --n-random 200
+
 # triage
 python audit_results.py scan_wilson2
 python triage_clean.py scan_wilson2
@@ -832,9 +1061,17 @@ python -u equivariance_f.py cicyquotients.m cicylist.txt scan_wilson2
 python -u equivariance_f.py cicyquotients.m cicylist.txt scan_wilson2 --cicy 6890
 ```
 
-Options utiles : `--sampling-threshold auto`, `--with-extensions` (réactive la
-branche cassée), `--n-gen`, et pour `equivariance_f.py` : `--cicy`,
-`--tous-groupes`, `--input`.
+Le scan extension écarte d'abord par certificat de pente (§5.13), puis par
+Hoppe ; le champ `pente_verdict` de chaque résultat vaut `true` (témoin trouvé)
+ou `null` (indéterminé) — jamais `false`, ces cas-là étant écartés.
+
+Options utiles : `--sampling-threshold auto`, `--extensions` (branche extension,
+chemin propre du §5.10), `--ext-exhaustif-max` (plafond d'énumération, défaut
+200 000 ; 0 force l'échantillonnage), `--n-gen`, et pour `equivariance_f.py` :
+`--cicy`, `--tous-groupes`, `--input`.
+
+`--with-extensions` n'existe plus : il activait le chemin par pseudo-monade du
+défaut 4.7. Le programme s'arrête avec ce motif plutôt que de l'ignorer.
 
 **Sous PowerShell**, le séparateur est `;` et non `&&`, `tee` s'écrit
 `Tee-Object`, et `python -u` est nécessaire pour voir la sortie progresser sur un

@@ -1061,6 +1061,38 @@ Vérifié en cassant, trois fois. Le dernier volet vient d'un cassage qui
 **passait** : ignorer la certification ne change rien sur `#7484`, dont tous les
 h⁰ sont certifiés. Il fallait une entrée où la garde mord réellement.
 
+
+### 5.16 Le balayage du §2, rejoué avec les filtres actuels
+
+Le balayage du §2 datait d'avant h³ (§5.5), d'avant la phase des twists (§5.15)
+et d'avant tout le travail sur la pente. `#7484` ayant prouvé que le catalogue
+contenait au moins un faux positif, il fallait savoir si les survivants
+tenaient. Le catalogue a d'abord été purgé par `hoppe_twists` — **115 → 114**,
+`#7484` retiré — puis la chaîne entière relancée.
+
+| | rejoué | §2 |
+|---|---|---|
+| passent le test nécessaire sur les charges | 108 | 108 |
+| couples évalués | 4 076 | 3 878 |
+| tués par h⁰(V) équivariant | 3 624 | 3 452 |
+| sans f équivariant | 36 | — |
+| indéterminés | 449 | 423 |
+| **survivants** | **3 couples, 2 candidats** | **3 couples, 2 candidats** |
+
+**Les trois couples sont les mêmes** : `#6890` (deux entrées du catalogue) et
+`#6947`, tous à λ = +1, tous avec le certificat de surjectivité — en (0,1,5,1,0)
+et (5,1,0,1,0) respectivement, aux degrés mêmes du §5.4.
+
+**Le §2 tient.** Il repose maintenant sur un balayage qui inclut h³, la phase
+des twists et un catalogue purgé, et sur deux fibrés dont la stabilité est
+démontrée et non plus seulement non éliminée (§5.14).
+
+**Les 449 indéterminés sont tous du même motif** — `surjectivité de f non
+certifiée` — et à **420 sur 449 de rang 5**. C'est exactement le mur du §5.4 :
+au rang 5 le certificat J_d = R_d n'est pas atteignable. Ces 449 lignes ne
+disent rien, ni dans un sens ni dans l'autre, et c'est le plus gros bloc non
+instruit du projet.
+
 ---
 
 ## 6. Ce qui reste faux ou absent
@@ -1069,7 +1101,8 @@ h⁰ sont certifiés. Il fallait une entrée où la garde mord réellement.
 |---|---|
 | voie « gros Γ » | **fermée, mesurée.** Le verrou n'était ni la certification Koszul ni les charges négatives, mais la ligne `len(c_charges) != 1` de `domaine_valide` : les 26 candidats à groupe d'ordre compatible sont tous E₆ à rank_C = 2, dont 24 satisfont tout le reste. Contrainte levée (`rank_c_max=None`, défaut 1 pour ne pas casser `hoppe_fast`) puis test relancé : **574 couples, 544 tués par h⁰(V) équivariant, 28 sans f équivariant, 0 survivant**. Aucun candidat à Γ d'ordre ≥ 4 ne passe la stabilité restreinte. Étendre ∧^p V et la surjectivité à rank_C = 2 est donc **inutile** : il n'y aurait rien à leur donner à manger |
 | surjectivité au rang 5 | **bloquant ensuite** : les 40 candidats du scan « gros Γ » sont tous de rang 5, précisément le régime où le certificat J_d = R_d n'est pas atteignable (§5.4). Le critère de Hoppe les départagera, mais le verdict final restera `indéterminé` tant que ce point n'est pas traité |
-| **branche extension** | chemin correct, **énuméré, testé, branché**, avec certificat de pente (§5.10, §5.12, §5.13). **Restent** : H¹(∧²V) donc le compte de Higgs et les exotiques ; `verify_hoppe.py` ignore les extensions ; la chaîne d'équivariance ne lit que des monades |
+| **branche extension — aucun discriminant en aval** | **mesuré, et structurel.** `hoppe_extension` n'est satisfait que si toutes les bornes sur les quotients gradués s'annulent, donc h⁰(F2) = 0 sur tout candidat retenu, donc le cup-produit ∪e part d'un espace nul : h⁰(V) = 0 **quelle que soit la classe d'extension**, vérifié sur **2 542 / 2 542**. Le test du §5.3 — celui qui tue 3 624 couples chez les monades — y est identiquement vide. Le test au niveau des charges l'est aussi : **2 792 / 2 792 passent, 0 via une permutation non triviale**. La branche produit un catalogue, pas une sélection. **Restent** aussi : H¹(∧²V) donc Higgs et exotiques ; `verify_hoppe.py` ignore les extensions |
+| extensions au rang 5 | **non énumérables** : 2,9·10⁵ tuples ordonnés dès m = 2, max_charge 2, au-dessus du plafond de 200 000 ; 1,1·10⁸ à m = 3. Aucune extension de rang 5 n'a jamais été engendrée — la route SU(5) par les extensions est donc **non explorée, faute de pouvoir l'atteindre**, et non par un résultat négatif |
 | **portée du verdict de Hoppe** | `stable: True` signifie « non éliminé » (§5.13). **Levé sur `#6890`, `#6947`** (équivariant, §5.14) et `#6715` (générique, §5.15). La phase des twists est branchée dans `hoppe_fast` et `process_cicy`, et a démontré un **faux positif du catalogue, `#7484`**. **Restent sans verdict** : 53 entrées non éliminées mais non prouvées stables, et 61 dont les twists ne sont pas certifiés |
 | critère exact au rang 5 | **hors budget, mesuré** : le polytope est instantané, mais les rangs sur ∧^p B pour p = 1..4 dépassent la dizaine de minutes par entrée. 68 des 115 entrées du catalogue sont dans ce cas. Mettre `dimY` en cache par degré est le gain le plus évident |
 | décision exacte de la pente | le certificat de Motzkin démontre l'instabilité quand il aboutit ; **la réciproque demanderait un solveur de programmation linéaire**, absent du dépôt (numpy seul). Les verdicts `None` ne sont donc ni des éliminations ni des validations |
@@ -1077,8 +1110,8 @@ h⁰ sont certifiés. Il fallait une entrée où la garde mord réellement.
 | ligne de Wilson explicite | **non construite** — le §5.8 est de la théorie des groupes appliquée aux nombres calculés ; le code ne manipule aucune ligne de Wilson. La corrélation entre Γ et la ligne de Wilson, qui décide de 2 ou 6 bidoublets de Higgs, reste un intrant |
 | Modèle Standard hors de portée avec ℤ₂ | limitation de **principe** : les lignes de Wilson préservent le rang, SO(10) est de rang 5 et le MS de rang 4 (§5.8). Ces deux candidats plafonnent à Pati–Salam ou SU(5) flipped |
 
-| balayage complet avec Hoppe complet | le balayage du §2 a été fait avant l'ajout de h³ (§5.5). Il ne peut que resserrer : `survit` exige maintenant strictement plus. Les deux retenus ont été revérifiés individuellement, le reste est à repasser |
-| surjectivité au rang 5 | critère hors de portée (§5.4). La question « le catalogue contient-il des monades non surjectives ? » est **ouverte et non instruite**, et indépendante de l'équivariance (§4.6) |
+| balayage complet avec Hoppe complet | **fait** (§5.16) : catalogue purgé par la phase des twists (115 → 114), chaîne relancée en entier, mêmes 3 couples survivants. Le §2 tient |
+| surjectivité au rang 5 | critère hors de portée (§5.4), et c'est **le plus gros bloc non instruit** : les 449 indéterminés du balayage rejoué ont tous ce seul motif, dont 420 au rang 5 (§5.16). La question « le catalogue contient-il des monades non surjectives ? » reste ouverte et indépendante de l'équivariance (§4.6) |
 | domaine du modèle S/I | 37 candidats sur 108 hors domaine, faute de charges positives, dont `#5452`, `#6826`, `#7745`, `#7669`. Ni retenus ni éliminés. Élargir demande de passer par Koszul plutôt que par le quotient monomial |
 | `end_V` (nombre de singlets) | valeur de remplissage codée en dur — **sans aucune valeur** |
 | exotiques SO(10) et SU(5) | structurellement nuls (§4.8) — fausse le classement, pas la sélection |

@@ -1018,28 +1018,72 @@ def espace_total(anneau, b_charges, c_charges, cases, dims):
     return np.eye(N, dtype=np.int64)
 
 
-def _degres_a_essayer(ambient, c, maxdim, n_degres, t_max=8):
+def _marge_predite(ambient, b_charges, c, d):
     """
-    Multidegres d >= c a soumettre au critere J_d = R_d, du moins cher au
-    plus cher.
+    dim source - dim cible, estimee par `dim_multi` (formule fermee).
 
-    Le critere vaut pour TOUT d >= 0, donc rien n'oblige a monter
-    uniformement dans toutes les directions : c + (1,...,1) fait exploser
-    dim S alors que c + e_k reste modeste. Sur #6890, la marche uniforme
-    passait de dim S = 450 a 4320 en un pas et butait sur le plafond, alors
-    que plusieurs degres intermediaires etaient accessibles.
+    Le critere J_d = R_d ne peut aboutir que si la source couvre la cible :
+    le rang est majore par la source. On le PREDIT ici a bon compte, dans
+    l'ambiant, pour ne soumettre que des degres viables -- `dimY`
+    construirait le quotient, c'est-a-dire une rref, soit l'operation qu'on
+    cherche justement a eviter.
 
-    On engendre donc c + v pour |v|_1 <= 2, PLUS des marches longues c + t.e_k
-    (t jusqu'a `t_max`), on ecarte ce qui depasse `maxdim`, et on trie par
-    taille croissante.
+    Renvoie None si la cible est vide.
+    """
+    m = len(c)
+    cible = dim_multi(ambient, d)
+    if cible == 0:
+        return None
+    src = 0
+    for b in b_charges:
+        # deg f_i = c - b_i, donc la source du terme i est R_{d - c + b_i}
+        src += dim_multi(ambient, [d[k] - c[k] + b[k] for k in range(m)])
+    return src - cible
 
-    Les marches longues sont indispensables et non un raffinement. La source
-    du critere est (+)_i R_{d - deg f_i}, la cible R_d. Le long d'un axe e_k,
-    les deux croissent comme (1/6) d_kkk t^3, donc leur rapport tend vers le
-    NOMBRE de f_i -- la source finit par depasser la cible, mais seulement
-    pour t assez grand. Sur #7300 (rang 5), aucun degre avec |v|_1 <= 2
-    n'atteignait source >= cible : le critere ne pouvait pas aboutir, et
-    l'echec ne disait rien sur la surjectivite.
+
+def _degres_a_essayer(ambient, c, maxdim, n_degres, t_max=8, b_charges=None):
+    """
+    Multidegres d >= c a soumettre au critere J_d = R_d.
+
+    ----------------------------------------------------------------------
+    Ce que la version precedente ne balayait pas -- et le chiffre que cela
+    fabriquait
+    ----------------------------------------------------------------------
+    Elle engendrait deux familles : les marches LONGUES sur un seul axe
+    (c + t.e_k) et les pas COURTS mixtes (c + v, |v|_1 <= 2), plus la
+    croissance uniforme c + t.(1,...,1). Elle ne combinait jamais longueur
+    et mixite. D'ou le constat du §5.4 : « au rang 5 la source ne rattrape
+    jamais la cible », et 449 couples classes `indetermine : surjectivite
+    de f non certifiee`, dont 420 de rang 5.
+
+    Ce constat mesurait la liste des directions essayees, pas la geometrie.
+    Balayage en directions mixtes longues sur #21 (rang 5, m = 5) :
+
+        d = [4, 4, 2, 5, 4]   source 2670   cible 1278   marge +1392
+        d = [2, 4, 4, 2, 7]   source 2446   cible 1074   marge +1372
+        d = [2, 2, 8, 5, 4]   source 2642   cible 1398   marge +1244
+
+    Trois cibles bien sous le plafond de 6000, et des marges de l'ordre de
+    +1300. Le critere etait atteignable ; c'est l'ensemble balaye qui ne
+    l'atteignait pas.
+
+    ----------------------------------------------------------------------
+    Deux corrections
+    ----------------------------------------------------------------------
+    (a) MONTEE ANISOTROPE. Aux familles precedentes s'ajoutent
+        c + t.(1,...,1) + s.e_k et une recherche locale gloutonne sur la
+        marge predite : depuis les meilleurs germes, on essaie d +/- e_k et
+        on garde ce qui ameliore, sous le plafond. Cela trouve des optima a
+        support plein sans enumerer {0..q}^m, inabordable des que m grandit.
+
+    (b) SELECTION PAR VIABILITE, si `b_charges` est fourni. L'ancienne
+        version triait par cout croissant et gardait les `n_degres` PREMIERS
+        -- exactement le mauvais sens, la marge s'ameliorant avec la taille :
+        elle depensait son budget sur les degres les moins susceptibles
+        d'aboutir. On ne garde desormais que les degres a marge predite
+        positive, puis les moins chers PARMI EUX.
+
+    Sans `b_charges`, le comportement historique est conserve.
     """
     from itertools import combinations_with_replacement
     m = len(ambient)
@@ -1060,27 +1104,76 @@ def _degres_a_essayer(ambient, c, maxdim, n_degres, t_max=8):
     # ecart constant de 32 jusqu'a t = 11. En revanche pour d = c + t.(1,...,1)
     # le terme dominant (1/6) sum d_ijk t^3 ne depend PAS du degre de base :
     # source et cible ont le meme terme principal, et la source l'emporte d'un
-    # facteur egal au nombre de f_i. C'est la seule direction ou le critere
-    # peut aboutir, au prix d'une croissance en t^3.
+    # facteur egal au nombre de f_i.
     for t in range(1, t_max + 1):
         vecteurs.append(tuple([t] * m))
-    out = []
+    # Uniforme PLUS une anisotropie : c'est la famille qui manquait.
+    for t in range(1, t_max + 1):
+        for k in range(m):
+            for sgn in (1, 2, 3):
+                v = [t] * m
+                v[k] += sgn
+                vecteurs.append(tuple(v))
+
+    def cout(d):
+        return dim_multi(ambient, d)
+
+    cands = []
     for v in vecteurs:
         d = [c[k] + v[k] for k in range(m)]
-        # `dim_multi` est une formule fermee ; `dimY` construirait le
-        # quotient, c'est-a-dire une rref sur l'ideal en degre d -- soit
-        # justement l'operation qu'on cherche a eviter. Filtrer apres coup
-        # ne protegerait de rien.
-        taille = dim_multi(ambient, d)
-        if taille <= maxdim:
-            out.append((taille, d))
-    out.sort()
-    vus, res = set(), []
-    for _, d in out:
-        if tuple(d) in vus:
-            continue
-        vus.add(tuple(d))
-        res.append(d)
+        taille = cout(d)
+        if 0 < taille <= maxdim:
+            cands.append(tuple(d))
+    cands = sorted(set(cands), key=cout)
+
+    if b_charges is not None:
+        # (a) recherche locale gloutonne sur la marge predite, depuis les
+        #     germes les plus prometteurs.
+        def _mg(d):
+            v = _marge_predite(ambient, b_charges, c, list(d))
+            return -10 ** 9 if v is None else v
+        germes = sorted(cands, key=lambda d: -_mg(d))[:6]
+        vus = set(cands)
+        for g in germes:
+            d = list(g)
+            mg = _marge_predite(ambient, b_charges, c, d)
+            for _ in range(40):
+                meilleur = None
+                for k in range(m):
+                    for pas in (1, -1):
+                        e = list(d)
+                        e[k] += pas
+                        if e[k] < c[k]:
+                            continue
+                        t = cout(e)
+                        if not (0 < t <= maxdim):
+                            continue
+                        mm = _marge_predite(ambient, b_charges, c, e)
+                        if mm is None:
+                            continue
+                        if mg is None or mm > mg:
+                            if meilleur is None or mm > meilleur[0]:
+                                meilleur = (mm, e)
+                if meilleur is None:
+                    break
+                mg, d = meilleur
+                if tuple(d) not in vus:
+                    vus.add(tuple(d))
+                    cands.append(tuple(d))
+        # (b) selection par VIABILITE : marge predite >= 0 d'abord, puis le
+        #     reste. On ne SUPPRIME pas les non viables, on les repousse --
+        #     la marge est estimee dans l'AMBIANT alors que le test exact
+        #     porte sur R = S/I, et les deux peuvent differer.
+        #
+        #     Le test est `mg >= 0`, ecrit explicitement : une marge
+        #     EXACTEMENT NULLE est le cas des certificats du §5.4 (source =
+        #     cible = 24 sur #6890). Un `mg or -1` la rendrait falsy et
+        #     l'ecarterait -- soit precisement les degres qui certifient.
+        cands = sorted(cands, key=lambda d: (0 if _mg(d) >= 0 else 1, cout(d)))
+
+    res = []
+    for d in cands:
+        res.append(list(d))
         if len(res) >= n_degres:
             break
     return res
@@ -1169,7 +1262,8 @@ def f_sans_point_base(anneau, b_charges, c_charges, base, offsets, dims,
             journal.append(('f identiquement nul', None, None))
             continue
 
-        for d in _degres_a_essayer(anneau.amb, c, maxdim, n_degres):
+        for d in _degres_a_essayer(anneau.amb, c, maxdim, n_degres,
+                                   b_charges=b_charges):
             cible = anneau.dimY(d)
             if cible == 0:
                 continue

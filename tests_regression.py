@@ -1612,6 +1612,114 @@ def t_hoppe_twists():
 
 
 # ======================================================================
+# 11 undecies. Multidegres du certificat de surjectivite
+# ======================================================================
+
+@test("multidegres : #21 passe de 4 degres impossibles a 4 viables")
+def t_degres_surjectivite():
+    """
+    Le certificat de surjectivite cherche un multidegre d avec J_d = R_d.
+    Le rang etant majore par la source, un d ou dim source < dim cible ne
+    peut PAS aboutir : l'echec y est arithmetique et ne dit rien.
+
+    ----------------------------------------------------------------------
+    Ce que l'ancienne selection fabriquait
+    ----------------------------------------------------------------------
+    Elle engendrait des marches LONGUES sur un seul axe et des pas COURTS
+    mixtes, jamais les deux a la fois, puis gardait les `n_degres` moins
+    chers -- exactement le mauvais sens, la marge s'ameliorant avec la
+    taille. Sur #21 (rang 5), les quatre degres retenus ont une marge
+    predite de -22, -21, -23 et -22 : le critere ne pouvait aboutir sur
+    AUCUN. D'ou 449 couples `indetermine : surjectivite de f non
+    certifiee`, dont 420 de rang 5, et le constat du §5.4 « hors de portee
+    au rang 5 » -- qui mesurait la liste des directions, pas la geometrie.
+
+    Quatre volets :
+
+    (a) CONTROLE NEGATIF, sur des nombres connus. L'ancienne selection sur
+        #21 doit donner des marges toutes STRICTEMENT negatives.
+
+    (b) LA CORRECTION MORD. La nouvelle doit donner des degres viables, et
+        la verification EXACTE par `dimY` -- et non par l'estimation dans
+        l'ambiant -- doit confirmer source > cible.
+
+    (c) NON-REGRESSION. Les degres qui certifient #6890 et #6947 au §5.4
+        doivent rester presents. Sans ce volet, on « corrigerait » #21 en
+        cassant les deux seuls candidats du projet.
+
+    (d) LE ZERO FALSY. Ces degres certifiants ont une marge EXACTEMENT
+        NULLE (source = cible = 24). Un test ecrit `marge or -1` les rend
+        falsy et les ecarte -- c'est le bug trouve en ecrivant ce test. Le
+        volet exige donc explicitement qu'une marge nulle soit RETENUE.
+    """
+    from cy_landscape.core.equivariant_monad import (_degres_a_essayer,
+                                                     _marge_predite)
+    from cy_landscape.core.sections import Ring
+    from cy_landscape.data.parse_oxford import load_oxford_file
+
+    entries = {e['num']: e for e in load_oxford_file('cicylist.txt')}
+
+    # --- (a) et (b) : #21, rang 5 ---------------------------------------
+    e21 = entries[21]
+    amb21 = e21['ambient']
+    B21 = [[0, 0, 2, 1, 0], [0, 0, 0, 0, 1], [0, 0, 0, 1, 0],
+           [0, 0, 1, 1, 0], [0, 0, 1, 0, 0], [0, 0, 0, 0, 1]]
+    C21 = [0, 0, 4, 3, 2]
+    assert [sum(x[k] for x in B21) for k in range(len(amb21))] == C21, "c1(V) != 0"
+
+    anc = _degres_a_essayer(amb21, C21, 6000, 4)
+    marges_anc = [_marge_predite(amb21, B21, C21, d) for d in anc]
+    assert anc and all(mg is not None and mg < 0 for mg in marges_anc), (
+        "l'ancienne selection sur #21 n'est plus impossible : le cas de "
+        "test ne mesure plus la correction", list(zip(anc, marges_anc)))
+
+    nou = _degres_a_essayer(amb21, C21, 6000, 4, b_charges=B21)
+    marges_nou = [_marge_predite(amb21, B21, C21, d) for d in nou]
+    assert nou and all(mg is not None and mg >= 0 for mg in marges_nou), (
+        "la nouvelle selection propose encore des degres impossibles",
+        list(zip(nou, marges_nou)))
+
+    # verification EXACTE : la marge predite l'est dans l'ambiant, le test
+    # reel porte sur R = S/I. Les deux peuvent differer -- on ne se fie pas
+    # a l'estimation pour conclure.
+    R21 = Ring(amb21, e21['config'], seed=2)
+    d0 = nou[0]
+    src = sum(R21.dimY([d0[k] - C21[k] + B21[i][k] for k in range(len(amb21))])
+              for i in range(len(B21)))
+    cible = R21.dimY(d0)
+    assert src > cible > 0, (d0, src, cible,
+                             "source insuffisante meme sur le degre retenu")
+
+    # --- (c) et (d) : les deux candidats du §2 --------------------------
+    ref = {6890: ([[0, 1, 0, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0],
+                   [0, 0, 1, 0, 0], [0, 0, 0, 1, 0]],
+                  [0, 1, 3, 1, 0], [0, 1, 5, 1, 0]),
+           6947: ([[1, 0, 0, 0, 0], [0, 0, 0, 1, 0], [1, 0, 0, 0, 0],
+                   [0, 1, 0, 0, 0], [1, 0, 0, 0, 0]],
+                  [3, 1, 0, 1, 0], [5, 1, 0, 1, 0])}
+    n_zero = 0
+    for num, (b, c, dref) in ref.items():
+        amb = entries[num]['ambient']
+        mg = _marge_predite(amb, b, c, dref)
+        # (d) : c'est bien le cas limite, marge nulle
+        assert mg == 0, (num, dref, mg, "le degre certifiant du §5.4 n'a "
+                                        "plus une marge nulle : le volet "
+                                        "du zero falsy ne mesure plus rien")
+        n_zero += 1
+        lst = _degres_a_essayer(amb, c, 6000, 4, b_charges=b)
+        assert dref in lst, (
+            f"#{num} : le degre certifiant {dref} du §5.4 a disparu de la "
+            f"selection. Une marge EXACTEMENT nulle est falsy en Python : "
+            f"un `marge or -1` l'ecarte, et on casse les deux candidats du "
+            f"projet en croyant reparer le rang 5", lst)
+
+    return (f"#21 : ancien {marges_anc} (tous impossibles) -> nouveau "
+            f"{marges_nou} ; verification exacte source {src} > cible "
+            f"{cible} ; les {n_zero} degres certifiants a marge NULLE du "
+            f"§5.4 sont conserves")
+
+
+# ======================================================================
 # 12. Ordre projectif et racines n-iemes
 # ======================================================================
 

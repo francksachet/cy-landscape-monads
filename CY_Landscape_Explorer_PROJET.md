@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 29 tests.
+> non une propriété des candidats, et la suite compte 30 tests.
 
 ---
 
@@ -118,7 +118,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        29 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        30 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -1093,6 +1093,68 @@ au rang 5 le certificat J_d = R_d n'est pas atteignable. Ces 449 lignes ne
 disent rien, ni dans un sens ni dans l'autre, et c'est le plus gros bloc non
 instruit du projet.
 
+
+### 5.17 Le mur du rang 5 n'était pas géométrique — il était dans la liste des degrés
+
+Les 449 indéterminés du §5.16 ont **un seul motif**, `surjectivité de f non
+certifiée`, dont 420 au rang 5. Le §5.4 en concluait que le critère J_d = R_d
+est « hors de portée au rang 5 ». **Ce constat mesurait la liste des multidegrés
+essayés, pas la géométrie.**
+
+`_degres_a_essayer` engendrait trois familles : marches **longues** sur un seul
+axe (c + t·e_k), pas **courts** mixtes (|v|₁ ≤ 2), et croissance uniforme
+c + t·(1,…,1). Elle ne combinait **jamais** longueur et mixité. Puis elle triait
+par coût croissant et gardait les `n_degres` **premiers** — exactement le mauvais
+sens, la marge s'améliorant avec la taille.
+
+Balayage en directions mixtes longues sur `#21` (rang 5, m = 5) :
+
+| d | source | cible | marge |
+|---|---|---|---|
+| [4, 4, 2, 5, 4] | 2 670 | 1 278 | **+1 392** |
+| [2, 4, 4, 2, 7] | 2 446 | 1 074 | **+1 372** |
+| [2, 2, 8, 5, 4] | 2 642 | 1 398 | **+1 244** |
+
+Des cibles bien sous le plafond de 6 000. Sur ce même `#21`, les quatre degrés
+retenus par l'ancienne sélection ont des marges de **−42, −43, −45, −46** : le
+critère ne pouvait aboutir sur aucun, quel que soit f.
+
+**Deux corrections.** Montée anisotrope (c + t·(1,…,1) + s·e_k, plus une
+recherche locale gloutonne sur la marge prédite, qui trouve des optima à support
+plein sans énumérer {0..q}^m). Et sélection **par viabilité** : les degrés à
+marge prédite ≥ 0 d'abord, les moins chers parmi eux. La marge est estimée par
+`dim_multi` — formule fermée dans l'ambiant — parce que `dimY` construirait le
+quotient, soit l'opération qu'on cherche à éviter ; le test exact reste dans la
+boucle.
+
+#### Un bug trouvé en écrivant le test
+
+Le filtre s'écrivait `(_marge_predite(...) or -1) >= 0`. **Une marge exactement
+nulle est falsy en Python**, donc traitée comme −1 et écartée. Or les deux
+certificats du §5.4 sont précisément à marge nulle — source = cible = 24 sur
+`#6890` comme sur `#6947`. Le filtre écartait exactement les degrés qui
+certifient les deux seuls candidats du projet. Corrigé, et figé par le volet (d)
+du 30ᵉ test, qui exige qu'une marge nulle soit conservée.
+
+#### Effet mesuré, et ce qu'il ne dit pas
+
+Sur les douze premières minutes du rejeu : **12 lignes `SURVIT` contre 3 dans le
+run complet précédent**, toutes sur `#21`, SU(5) de rang 5, Γ = ℤ₂, λ = +1,
+certifiées surjectives en (1,3,1,5,3) et (1,3,3,1,5). Le régime que le §5.4
+déclarait inatteignable rend désormais des verdicts.
+
+**Ces survivants ne sont pas des modèles à trois générations, et il faut le dire
+tout de suite.** `#21` a |χ(V)| ∈ {24, 48} ; avec |Γ| = 2 cela donne **12 ou 24
+générations**, pas 3. Ce sont des fibrés stables, équivariants et surjectifs, au
+mauvais indice pour ce groupe. `#21` porte aussi des groupes d'ordre 4, 8 et 16 —
+et |χ| = 24 avec |Γ| = 8 donnerait 3 générations. C'est cette combinaison-là qu'il
+faut regarder, et le rejeu ne l'a pas encore atteinte.
+
+**Coût.** Les degrés viables sont bien plus gros que les degrés simplement bon
+marché : le rejeu avance environ dix fois plus lentement (141 lignes en 32 min,
+contre 4 130 en 95 min). Le balayage complet demandera plusieurs heures. C'est le
+prix d'un critère qui peut aboutir, contre un qui ne le pouvait pas.
+
 ---
 
 ## 6. Ce qui reste faux ou absent
@@ -1111,7 +1173,7 @@ instruit du projet.
 | Modèle Standard hors de portée avec ℤ₂ | limitation de **principe** : les lignes de Wilson préservent le rang, SO(10) est de rang 5 et le MS de rang 4 (§5.8). Ces deux candidats plafonnent à Pati–Salam ou SU(5) flipped |
 
 | balayage complet avec Hoppe complet | **fait** (§5.16) : catalogue purgé par la phase des twists (115 → 114), chaîne relancée en entier, mêmes 3 couples survivants. Le §2 tient |
-| surjectivité au rang 5 | critère hors de portée (§5.4), et c'est **le plus gros bloc non instruit** : les 449 indéterminés du balayage rejoué ont tous ce seul motif, dont 420 au rang 5 (§5.16). La question « le catalogue contient-il des monades non surjectives ? » reste ouverte et indépendante de l'équivariance (§4.6) |
+| surjectivité au rang 5 | **le mur était dans la liste des multidegrés, pas dans la géométrie** (§5.17). Directions mixtes longues + sélection par viabilité : `#21` passe de quatre degrés à marge −42…−46 à quatre degrés viables, et le rang 5 rend des verdicts. **Rejeu complet en cours** — plusieurs heures, les degrés viables étant bien plus gros. La question « le catalogue contient-il des monades non surjectives ? » reste ouverte et indépendante de l'équivariance (§4.6) |
 | domaine du modèle S/I | 37 candidats sur 108 hors domaine, faute de charges positives, dont `#5452`, `#6826`, `#7745`, `#7669`. Ni retenus ni éliminés. Élargir demande de passer par Koszul plutôt que par le quotient monomial |
 | `end_V` (nombre de singlets) | valeur de remplissage codée en dur — **sans aucune valeur** |
 | exotiques SO(10) et SU(5) | structurellement nuls (§4.8) — fausse le classement, pas la sélection |
@@ -1159,7 +1221,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 29 tests, ~1 min. À lancer après chaque modification,
+**`tests_regression.py` — 30 tests, ~1 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -1184,6 +1246,7 @@ Huit ajouts de la session « équivariance » :
 | ordre projectif | racines n-ièmes construites comme puissances, comptage = pgcd(n, p−1) | oui : l'ancienne `racines_niemes` rendait la liste vide sur 7³ = 343 |
 | phase des twists | les cinq h⁰ de `#7484` figés un par un, et la borne 13 − 12 = 1 ; **deux verdicts opposés** (`#7484` tombe, `#6890` survit) ; et `#21`, dont 5 twists sur 45 ne sont pas certifiés, doit rendre `None` et non `False` | oui, dont un cassage qui passait d'abord : ignorer la certification ne change rien sur `#7484`, tous ses h⁰ étant certifiés |
 | Hoppe suffisant | valeur connue d'avance négative (f₁ = 0 ⟹ h⁰(V) = dim H⁰(O(b₁))) ; **anti-vacuité** : les 110 twists doivent avoir une source non vide ; et le twist doit **agir**, la source devant varier avec H | oui, dont un cassage qui passait d'abord : neutraliser `twist` laissait le test vert |
+| multidegrés du certificat | marges figées sur `#21` (ancien : tout négatif ; nouveau : tout viable), vérification EXACTE par `dimY` et non par l'estimation, non-régression sur les degrés certifiants de `#6890` et `#6947`, et **le zéro falsy** : une marge nulle doit être conservée | oui, trois fois, dont le bug lui-même — réintroduire `marge or -1` fait tomber le volet des degrés certifiants |
 | pente des sous-faisceaux | degré au point J = v contre Riemann-Roch ; **deux verdicts opposés construits** ; et un cas réel où un témoin existe hors grille, qui doit rendre `None` et non `False` | oui, de trois façons : convertir les `None` en `False`, renvoyer toujours `True`, renvoyer toujours `False` |
 | extensions énumérées | comptage par convolution contre comptage par énumération ; **contrôle négatif construit** : le tirage doit être vu perdre 245/281 extensions d'un cran de `max_charge` au suivant | oui, dans les deux sens : revenir au tirage casse la monotonie ; rendre le tirage monotone casse le contrôle négatif |
 

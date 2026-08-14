@@ -23,6 +23,27 @@ from typing import List, Optional
 from cy_landscape.core.exact_cohomology import bundle_cohomology_exact
 
 
+_UINT32 = 2 ** 31 - 1
+
+
+def _mix(seed, c_tuple, r_B):
+    """
+    Graine deterministe derivee de (seed, c, r_B).
+
+    N'utilise PAS hash() : le hachage des tuples Python est randomise par
+    processus (PYTHONHASHSEED), ce qui rendrait les tirages differents
+    d'un worker a l'autre et non reproductibles entre deux lancements.
+
+    (Definie ici plutot que dans positive_monads.py, qui importe ce
+    module : `generate_monads` en a besoin, et l'inverse serait circulaire.
+    `positive_monads` la reexporte, la signature est inchangee.)
+    """
+    h = (seed * 1_000_003 + r_B * 7919 + 2_166_136_261) & 0xFFFFFFFF
+    for v in c_tuple:
+        h = ((h ^ (int(v) + 0x9E3779B9)) * 16_777_619) & 0xFFFFFFFF
+    return h % _UINT32
+
+
 @dataclass
 class MonadBundle:
     """Un fibre monade defini par ses charges B et C."""
@@ -301,7 +322,236 @@ def check_monad_stability(monad, ambient_dims, config_matrix, intersection_numbe
     return {"semi_stable": True, "reason": "Aucun sous-faisceau destabilisant trouve"}
 
 
-def generate_monads(m, rank_V, max_charge=3, n_random=100, rng=None):
+# ======================================================================
+# La famille « sommes de vecteurs unite » -- enumeree, plus tiree
+# ======================================================================
+#
+# CE QUE CE BLOC CORRIGE
+# ----------------------
+# L'ancien `generate_monads` produisait ses monades « anti-symetriques »
+# par TIRAGE : `for _ in range(min(m*3, 10))`, soit DIX tirages, pris sur
+# le RNG PARTAGE avec le generateur positif. Deux consequences.
+#
+#   1. Couverture. La famille visee -- des b_i de la forme e_a, ou
+#      e_a +/- e_b -- compte 101 multiensembles valides rien que pour
+#      m = 5, r_B = 5 dans sa strate pure, et 1 911 en autorisant un
+#      vecteur perturbe. Dix tirages en voyaient au mieux dix.
+#
+#   2. Reproductibilite. Le RNG etant partage, le nombre de tirages
+#      consommes en amont par `generate_positive_monads` decidait de la
+#      valeur des dix tirages. Toute modification du generateur positif
+#      -- y compris une correction sans rapport, comme celle du §5.11 --
+#      redistribuait la loterie.
+#
+# C'est ce mecanisme qui a fait DISPARAITRE les deux candidats phares du
+# projet (#6890 et #6947) entre deux scans, sans qu'aucun filtre ne les
+# elimine : ils n'ont simplement plus ete engendres. Or tous deux sont
+# des sommes de vecteurs unite PURS :
+#
+#      #6890 : B = O(e_1) + O(e_2)^3 + O(e_3)     -> multiensemble {1,2,2,2,3}
+#      #6947 : B = O(e_0)^3 + O(e_1) + O(e_3)     -> multiensemble {0,0,0,1,3}
+#      #6715 : B = O(e_3)^3 + O(e_0) + O(e_0+e_2) -> UN vecteur perturbe
+#
+# Les enumerer les rend DEMONTRES et non plus chanceux.
+#
+# CE QUI RESTE TIRE, ET POURQUOI
+# ------------------------------
+# La famille complete (tout b_i de la forme e_a +/- e_b) n'est pas
+# enumerable : pour m = 5, r_B = 6, elle depasse deja 2 000 000 de
+# multiensembles a |c1(B)|_inf <= 3. On enumere donc par STRATES, selon
+# le nombre de vecteurs perturbes :
+#
+#      k = 0 : tous les b_i sont des vecteurs unite   (toujours enumeree)
+#      k = 1 : au plus un b_i perturbe                (si sous le plafond)
+#      k >= 2 : jamais enumere -- echantillonne, et DECLARE comme tel.
+#
+# Conformement a la regle des filtres (§8), `stats` recoit pour chaque
+# strate le nombre enumere, le nombre total, et le mode. Un resultat
+# d'absence sur cette branche n'est interpretable qu'avec ces trois
+# nombres sous les yeux.
+
+def _vecteurs_unite(m):
+    """Les m vecteurs e_a."""
+    return [tuple(1 if k == a else 0 for k in range(m)) for a in range(m)]
+
+
+def _vecteurs_perturbes(m):
+    """Les e_a + eps*e_b, a != b, eps = +/-1. Deduplique et trie : l'ordre
+    ne doit dependre ni de PYTHONHASHSEED ni de l'ordre d'insertion."""
+    out = set()
+    for a in range(m):
+        for b in range(m):
+            if b == a:
+                continue
+            for eps in (-1, 1):
+                q = [0] * m
+                q[a] = 1
+                q[b] += eps
+                out.add(tuple(q))
+    return sorted(out)
+
+
+def _multisets_unite(m, taille, borne_mult):
+    """
+    Enumere les multiensembles de `taille` vecteurs unite dont chaque
+    multiplicite est <= `borne_mult`.
+
+    Rend directement les multiplicites (un vecteur de m entiers >= 0 de
+    somme `taille`), ce qui evite de construire puis rejeter : la borne
+    est appliquee pendant la descente, pas apres.
+    """
+    mult = [0] * m
+    reste = taille
+
+    def descente(i, reste):
+        if i == m - 1:
+            if reste <= borne_mult:
+                mult[i] = reste
+                yield tuple(mult)
+                mult[i] = 0
+            return
+        haut = min(borne_mult, reste)
+        for v in range(haut + 1):
+            mult[i] = v
+            yield from descente(i + 1, reste - v)
+        mult[i] = 0
+
+    yield from descente(0, reste)
+
+
+def _compte_multisets_unite(m, taille, borne_mult):
+    """Cardinal de `_multisets_unite`, par recurrence -- sans rien construire.
+
+    Sert a decider AVANT enumeration si la strate tient sous le plafond.
+    """
+    dp = [1] + [0] * taille
+    for _ in range(m):
+        nouveau = [0] * (taille + 1)
+        for s in range(taille + 1):
+            if not dp[s]:
+                continue
+            for v in range(min(borne_mult, taille - s) + 1):
+                nouveau[s + v] += dp[s]
+        dp = nouveau
+    return dp[taille]
+
+
+def _b_depuis_mult(mult, m):
+    """Multiplicites -> liste de vecteurs de charges."""
+    b = []
+    for a in range(m):
+        for _ in range(mult[a]):
+            q = [0] * m
+            q[a] = 1
+            b.append(q)
+    return b
+
+
+def familles_unite(m, r_B, max_charge, plafond=200_000, plafond_perturbe=20_000,
+                   rng=None, n_echantillon=2000, stats=None, cle=None):
+    """
+    La famille « sommes de vecteurs unite, au plus un vecteur perturbe »,
+    filtree par |c1(B)|_inf <= max_charge.
+
+    Deux plafonds, parce que les deux strates n'ont ni la meme taille ni
+    la meme importance :
+
+    - `plafond` (strate pure, k = 0). Genereux : 200 000 suffit a rendre
+      cette strate EXHAUSTIVE pour tout m <= 12 et tout r_B <= 7, donc
+      pour la totalite des 194 CICYs a quotient libre (m <= 10). C'est la
+      famille structurellement naturelle -- B = somme directe de O(e_a) --
+      et celle d'ou sortent #6890 et #6947.
+    - `plafond_perturbe` (strate k = 1). Plus serre : cette strate croit
+      comme |Q| = 2m(m-1) fois la precedente et depasse le million des
+      m = 8. 20 000 la garde exhaustive jusqu'a m = 6 (158 des 194 CICYs)
+      et la rabat sur un echantillonnage DECLARE au-dela.
+
+    Retourne la liste des b_charges. Renseigne `stats[cle]` avec, par
+    strate : mode ('exhaustif' / 'echantillonne'), nombre produit, et
+    nombre total quand il est connu.
+    """
+    infos = {}
+    sortie = []
+
+    # ---- strate k = 0 : que des vecteurs unite ------------------------
+    # |c1(B)|_inf <= max_charge equivaut ici a « chaque multiplicite
+    # <= max_charge », car c1(B)_k EST la multiplicite de e_k. Le filtre
+    # est donc exact et applique dans la descente : rien n'est produit
+    # pour etre ensuite rejete.
+    n0 = _compte_multisets_unite(m, r_B, max_charge)
+    if n0 <= plafond:
+        for mult in _multisets_unite(m, r_B, max_charge):
+            sortie.append(_b_depuis_mult(mult, m))
+        infos['k0'] = {'mode': 'exhaustif', 'produit': n0, 'total': n0}
+    else:
+        # Jamais atteint pour les CICYs de la liste d'Oxford (m <= 19,
+        # r_B <= 7 donne au plus quelques dizaines de milliers), mais on
+        # ne laisse pas le cas silencieux.
+        vus = set()
+        r = rng if rng is not None else np.random.RandomState(0)
+        for _ in range(n_echantillon):
+            mult = [0] * m
+            for _ in range(r_B):
+                mult[int(r.randint(0, m))] += 1
+            if max(mult) <= max_charge:
+                vus.add(tuple(mult))
+        for mult in sorted(vus):
+            sortie.append(_b_depuis_mult(mult, m))
+        infos['k0'] = {'mode': 'echantillonne', 'produit': len(vus),
+                       'total': n0}
+
+    # ---- strate k = 1 : un seul vecteur perturbe ----------------------
+    Q = _vecteurs_perturbes(m)
+    if m > 1 and r_B >= 1:
+        # Un vecteur perturbe deplace chaque composante de +1 et de eps ;
+        # la partie pure doit donc rester dans [-(max_charge+1), max_charge+1].
+        n_pur = _compte_multisets_unite(m, r_B - 1, max_charge + 1)
+        travail = n_pur * len(Q)
+        if travail <= plafond_perturbe:
+            for mult in _multisets_unite(m, r_B - 1, max_charge + 1):
+                base = _b_depuis_mult(mult, m)
+                for q in Q:
+                    c1 = [mult[k] + q[k] for k in range(m)]
+                    if all(abs(x) <= max_charge for x in c1):
+                        sortie.append(base + [list(q)])
+            infos['k1'] = {'mode': 'exhaustif', 'produit': travail,
+                           'total': travail}
+        else:
+            vus = set()
+            r = rng if rng is not None else np.random.RandomState(0)
+            for _ in range(n_echantillon):
+                mult = [0] * m
+                for _ in range(r_B - 1):
+                    mult[int(r.randint(0, m))] += 1
+                q = Q[int(r.randint(0, len(Q)))]
+                c1 = [mult[k] + q[k] for k in range(m)]
+                if all(abs(x) <= max_charge for x in c1):
+                    vus.add((tuple(mult), q))
+            for mult, q in sorted(vus):
+                sortie.append(_b_depuis_mult(list(mult), m) + [list(q)])
+            infos['k1'] = {'mode': 'echantillonne', 'produit': len(vus),
+                           'total': travail}
+
+    # ---- strates k >= 2 : jamais enumerees ----------------------------
+    infos['k2+'] = {'mode': 'non_couvert', 'produit': 0, 'total': None}
+
+    if stats is not None:
+        stats.setdefault('familles_unite', {})[cle or (m, r_B)] = infos
+    return sortie
+
+
+def _c_depuis_c1B(c1B, r_C, m):
+    """Repartit c1(B) sur r_C fibres en droites, de sorte que c1(V) = 0."""
+    if r_C == 1:
+        return [list(c1B)]
+    c1 = [c1B[k] // 2 for k in range(m)]
+    c2 = [c1B[k] - c1[k] for k in range(m)]
+    return [c1, c2]
+
+
+def generate_monads(m, rank_V, max_charge=3, n_random=100, rng=None,
+                    seed=42, plafond_unite=200_000, plafond_perturbe=20_000,
+                    stats=None):
     """
     Genere des fibres monades candidats.
 
@@ -310,19 +560,33 @@ def generate_monads(m, rank_V, max_charge=3, n_random=100, rng=None):
     - r_B = r_V + r_C
     - c1(V) = c1(B) - c1(C) = 0
     - Charges dans [-max_charge, max_charge]
-    """
-    if rng is None:
-        rng = np.random.RandomState(42)
 
+    Deux proprietes acquises ici et absentes de la version precedente :
+
+    - la famille des sommes de vecteurs unite est ENUMEREE (voir le bloc
+      ci-dessus) au lieu d'etre tiree dix fois ;
+    - le tirage residuel utilise un RNG DERIVE de (seed, m, max_charge,
+      rank_V, r_C) et non plus le RNG partage avec le generateur positif.
+      Une modification du generateur positif ne peut donc plus deplacer
+      ce que celui-ci produit. C'est la lecon du §5.11, qui n'avait ete
+      appliquee qu'a `generate_positive_monads`.
+
+    `rng` est conserve dans la signature pour compatibilite avec les
+    appelants existants, mais n'est plus utilise.
+    """
     monads = []
 
     for r_C in [1, 2]:
         r_B = rank_V + r_C
+        # RNG PROPRE a (seed, m, max_charge, rank_V, r_C).
+        rng_local = np.random.RandomState(
+            _mix(seed, (m, max_charge, rank_V, r_C), r_B))
 
         # Monades structurees
         # Type 1 : B = O(e_1) ⊕ ... ⊕ O(e_{rB}), C = O(sum_B)
+        # Sous-cas des multiensembles de vecteurs unite ci-dessous ; garde
+        # pour ne pas changer l'ordre de sortie des premieres monades.
         if r_C == 1:
-            # Quelques configurations simples
             for shift in range(min(m, 3)):
                 b_charges = []
                 for r in range(r_B):
@@ -330,48 +594,31 @@ def generate_monads(m, rank_V, max_charge=3, n_random=100, rng=None):
                     q[(r + shift) % m] = 1
                     b_charges.append(q)
                 c1B = [sum(b[k] for b in b_charges) for k in range(m)]
-                c_charges = [c1B]  # c1(C) = c1(B) => c1(V) = 0
                 if all(abs(x) <= max_charge for x in c1B):
-                    monads.append(MonadBundle(b_charges, c_charges))
+                    monads.append(MonadBundle(b_charges, [c1B]))
 
-        # Type 2 : anti-symetriques
-        for _ in range(min(m * 3, 10)):
-            b_charges = []
-            for r in range(r_B):
-                q = [0] * m
-                i1 = rng.randint(0, m)
-                q[i1] = 1
-                if m > 1:
-                    i2 = (i1 + 1 + rng.randint(0, m - 1)) % m
-                    q[i2] = rng.choice([-1, 0, 1])
-                b_charges.append(q)
+        # Type 2 : sommes de vecteurs unite -- ENUMEREES
+        for b_charges in familles_unite(
+                m, r_B, max_charge, plafond=plafond_unite,
+                plafond_perturbe=plafond_perturbe, rng=rng_local,
+                stats=stats, cle=(m, rank_V, r_C)):
             c1B = [sum(b[k] for b in b_charges) for k in range(m)]
-            if r_C == 1:
-                c_charges = [c1B]
-            else:
-                # Repartir c1B sur 2 line bundles
-                c1 = [c1B[k] // 2 for k in range(m)]
-                c2 = [c1B[k] - c1[k] for k in range(m)]
-                c_charges = [c1, c2]
             if all(abs(x) <= max_charge for x in c1B):
-                monads.append(MonadBundle(b_charges, c_charges))
+                monads.append(MonadBundle(
+                    b_charges, _c_depuis_c1B(c1B, r_C, m)))
 
-        # Monades aleatoires
+        # Monades aleatoires (charges quelconques dans [-max_charge, max_charge])
         for _ in range(n_random):
             b_charges = []
             for r in range(r_B):
-                q = [int(rng.randint(-max_charge, max_charge + 1)) for _ in range(m)]
+                q = [int(rng_local.randint(-max_charge, max_charge + 1))
+                     for _ in range(m)]
                 b_charges.append(q)
             c1B = [sum(b[k] for b in b_charges) for k in range(m)]
             if any(abs(x) > max_charge * r_B for x in c1B):
                 continue
-            if r_C == 1:
-                c_charges = [c1B]
-            else:
-                c1 = [c1B[k] // 2 for k in range(m)]
-                c2 = [c1B[k] - c1[k] for k in range(m)]
-                c_charges = [c1, c2]
-            monads.append(MonadBundle(b_charges, c_charges))
+            monads.append(MonadBundle(
+                b_charges, _c_depuis_c1B(c1B, r_C, m)))
 
     return monads
 

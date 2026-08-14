@@ -28,11 +28,30 @@ from multiprocessing import Pool, cpu_count
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+def _resume_unite(stats_gen, m, rank_V, r_C):
+    """
+    Resume, pour une monade donnee, l'etat de la famille dont elle sort.
+
+    REGLE DES FILTRES (§8) : un filtre doit declarer combien il a laisse
+    passer, et pourquoi. Le generateur classique est un filtre comme un
+    autre -- c'est meme celui qui a fait disparaitre #6890 et #6947 sans
+    qu'aucune ligne ne le signale. Chaque resultat porte donc desormais
+    l'etat des deux strates qui l'ont produit : 'exhaustif' veut dire que
+    l'ABSENCE d'un fibre de cette forme est un enonce ; 'echantillonne'
+    veut dire qu'elle n'en est pas un.
+    """
+    info = (stats_gen or {}).get('familles_unite', {}).get((m, rank_V, r_C))
+    if not info:
+        return None
+    return {k: [v['mode'], v['produit'], v['total']]
+            for k, v in info.items()}
+
+
 def process_cicy(args):
     """Worker : traite une CICY."""
     (c, max_charge, n_random, seed, sampling_threshold, sampling_budget,
      with_extensions, cibles_gen, ordres_gamma, positive_only,
-     exhaustif_max, ext_exhaustif_max) = args
+     exhaustif_max, ext_exhaustif_max, unite_max, unite_perturbe_max) = args
 
     from cy_landscape.core.intersection import (
         compute_intersection_numbers, compute_euler_from_intersection,
@@ -123,8 +142,22 @@ def process_cicy(args):
         ]
         if not positive_only:
             generateurs.append(
+                # max_charge=3 est FIGE ici, et ne suit pas --max-charge :
+                # c'est la borne sous laquelle la famille des sommes de
+                # vecteurs unite est enumeree, et sous laquelle les candidats
+                # de reference du projet ont ete trouves. La brancher sur
+                # --max-charge changerait la famille enumeree sans que rien
+                # ne le declare.
+                # `seed` est passe explicitement : le generateur en derive son
+                # propre RNG et ne depend plus de ce que le generateur positif
+                # a consomme avant lui -- c'est la lecon du §5.11, qui n'avait
+                # jamais ete appliquee a ce generateur-ci et qui a coute les
+                # candidats #6890, #6947 et #6715 entre deux scans.
                 ('monad', generate_monads(m, rank_V, max_charge=3,
-                                          n_random=n_random, rng=rng)))
+                                          n_random=n_random, seed=seed,
+                                          plafond_unite=unite_max,
+                                          plafond_perturbe=unite_perturbe_max,
+                                          stats=stats_gen)))
         for kind, monads in generateurs:
             for monad in monads:
                 if not monad.c1_vanishes:
@@ -425,6 +458,12 @@ def process_cicy(args):
                     'c_charges': [list(cc) for cc in monad.c_charges],
                     'hoppe': hoppe['reason'],
                     'gen': GENERATOR_VERSION,
+                    # Etat des strates du generateur classique -- voir
+                    # `_resume_unite`. None pour 'pos_monad', qui declare
+                    # sa couverture par son propre champ.
+                    'unite_strates': (_resume_unite(stats_gen, m, rank_V,
+                                                    monad.rank_C)
+                                      if kind == 'monad' else None),
                     'higgs_certifie': higgs_connu,
                     'coh_bounds': {str(k): list(v) for k, v in coh_ex['bounds'].items()},
                     'chi_V': coh_ex['chi'],
@@ -686,6 +725,22 @@ def main():
                             "max_charge (216 pertes sur 222 en passant de 2 "
                             "a 3), donc aucun enonce d'absence n'en decoule. "
                             "0 = forcer l'echantillonnage.")
+    parser.add_argument('--unite-max', type=int, default=200000,
+                       help="Plafond d'enumeration de la strate PURE du "
+                            "generateur classique (tous les b_i sont des "
+                            "vecteurs unite e_a). 200 000 la rend exhaustive "
+                            "pour tout m <= 12, donc pour les 194 CICYs a "
+                            "quotient libre. C'est la famille d'ou sortent "
+                            "#6890 et #6947 : sous ce plafond, leur presence "
+                            "est demontree et non plus tiree au sort.")
+    parser.add_argument('--unite-perturbe-max', type=int, default=20000,
+                       help="Plafond d'enumeration de la strate a UN vecteur "
+                            "perturbe (un b_i de la forme e_a +/- e_b). Elle "
+                            "croit comme 2m(m-1) fois la precedente ; 20 000 "
+                            "la garde exhaustive jusqu'a m = 6 (158 des 194) "
+                            "et la rabat au-dela sur un echantillonnage "
+                            "DECLARE dans le champ `unite_strates` de chaque "
+                            "resultat. C'est cette strate qui contient #6715.")
     parser.add_argument('--positive-only', action='store_true',
                        help="N'utiliser que le generateur positif. Les monades "
                             "classiques produisent des charges negatives, hors "
@@ -754,6 +809,8 @@ def main():
         'positive_only': args.positive_only,
         'exhaustif_max': args.exhaustif_max,
         'ext_exhaustif_max': args.ext_exhaustif_max,
+        'unite_max': args.unite_max,
+        'unite_perturbe_max': args.unite_perturbe_max,
     }
 
     # Valeurs par defaut des cles introduites APRES la creation d'un
@@ -763,7 +820,8 @@ def main():
     # deviendrait impossible a reprendre apres cette mise a jour.
     PARAM_DEFAULTS = {'sampling_threshold': 'off', 'sampling_budget': 100,
                       'with_extensions': False, 'wilson': None, 'n_gen': 3,
-                      'ext_exhaustif_max': 200000}
+                      'ext_exhaustif_max': 200000,
+                      'unite_max': 200000, 'unite_perturbe_max': 20000}
 
     if args.reset:
         for p in (progress_path, results_path):
@@ -835,7 +893,9 @@ def main():
                         _ordres_pour(c['num'], wilson),
                         args.positive_only,
                         args.exhaustif_max,
-                        args.ext_exhaustif_max)
+                        args.ext_exhaustif_max,
+                        args.unite_max,
+                        args.unite_perturbe_max)
                        for c in to_process]
 
         interrupted = {'flag': False}

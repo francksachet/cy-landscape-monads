@@ -186,7 +186,14 @@ def t_wedge2_chi():
         m = len(c['ambient'])
         for rk, ref in ((3, None), (4, 0)):
             rng = np.random.RandomState(3)
-            for mo in generate_monads(m, rk, max_charge=3, n_random=60, rng=rng):
+            # `generate_monads` enumere desormais la famille des vecteurs
+            # unite : il en rend des milliers la ou il en tirait ~110. Sans
+            # cette borne le test tournerait des heures pour verifier mille
+            # fois la meme identite. On en prend 40 par (CICY, rang), ce qui
+            # laisse largement les 60 exiges plus bas sur six CICYs.
+            pris = 0
+            for mo in generate_monads(m, rk, max_charge=3, n_random=60,
+                                      seed=3):
                 if mo.rank_C != 1:
                     continue
                 r = cohomology_wedge2_V(c['ambient'], cfg,
@@ -196,6 +203,9 @@ def t_wedge2_chi():
                     f"rang {rk} : {r['chi_wedge2V']} vs {att}"
                 if rk == 3: n3 += 1
                 else: n4 += 1
+                pris += 1
+                if pris >= 40:
+                    break
         if n3 > 60 and n4 > 60:
             break
     return f"{n3} monades rang 3, {n4} rang 4"
@@ -2028,6 +2038,157 @@ def t_ordre_projectif():
     assert c == pow(mu, 3, p), (c, pow(mu, 3, p))
     assert c != 1, "cas trivial : le test ne prouverait rien"
     return f"T^3 = {c}.Id avec c != 1 ; racines n-iemes verifiees sur 4 cas"
+
+
+# ======================================================================
+# Generateur classique : la famille des vecteurs unite est ENUMEREE
+# ======================================================================
+
+@test("generate_monads enumere la famille unite et retrouve #6890/#6947/#6715")
+def t_generateur_classique_enumere():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    Les trois candidats de reference du projet ont DISPARU entre deux
+    scans sans qu'aucun filtre ne les elimine. Cause : ils sortaient du
+    bloc « anti-symetriques » de `generate_monads`, qui tirait DIX
+    configurations au hasard, sur le RNG PARTAGE avec le generateur
+    positif. Corriger le generateur positif (§5.11) redistribuait la
+    loterie, et la loterie ne les a plus sortis.
+
+    Le test porte donc DEUX verdicts opposes, et c'est le second qui lui
+    donne sa valeur :
+
+      (a) l'enumeration les contient -- par construction, pas par chance ;
+      (b) l'ancien tirage a dix ne les contient PAS.
+
+    Sans (b), (a) passerait aussi bien avec un generateur qui les aurait
+    trouves par hasard, et le test ne dirait rien du defaut repare.
+
+    Il verifie en outre l'independance au RNG amont : le meme `seed` doit
+    donner exactement la meme sortie quel que soit l'etat d'un RNG
+    partage, puisqu'il n'y a plus de RNG partage.
+    """
+    from cy_landscape.core.monads import (generate_monads, familles_unite,
+                                          _compte_multisets_unite,
+                                          _multisets_unite)
+
+    # B des trois candidats, tels qu'ils figurent dans scan_wilson2.
+    # #6890 et #6947 sont des sommes de vecteurs unite PURS (strate k=0),
+    # #6715 porte UN vecteur perturbe, e_0 + e_2 (strate k=1) : les deux
+    # strates sont donc exercees.
+    CIBLES = {
+        6890: [[0, 1, 0, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0],
+               [0, 0, 1, 0, 0], [0, 0, 0, 1, 0]],
+        6947: [[1, 0, 0, 0, 0], [0, 0, 0, 1, 0], [1, 0, 0, 0, 0],
+               [0, 1, 0, 0, 0], [1, 0, 0, 0, 0]],
+        6715: [[0, 0, 0, 1, 0], [0, 0, 0, 1, 0], [1, 0, 0, 0, 0],
+               [1, 0, 1, 0, 0], [0, 0, 0, 1, 0]],
+    }
+    def cle(b):
+        return tuple(sorted(tuple(x) for x in b))
+
+    # --- (a) l'enumeration les contient ------------------------------
+    st = {}
+    ms = generate_monads(5, 4, max_charge=3, n_random=150, seed=42, stats=st)
+    vus = {cle(mo.b_charges) for mo in ms}
+    manquants = [n for n, b in CIBLES.items() if cle(b) not in vus]
+    assert not manquants, \
+        f"candidats absents de l'enumeration : {manquants}"
+
+    # Les deux strates doivent etre EXHAUSTIVES a m = 5 : sinon (a)
+    # redeviendrait un coup de chance sous un autre nom.
+    info = st['familles_unite'][(5, 4, 1)]
+    assert info['k0']['mode'] == 'exhaustif', info['k0']
+    assert info['k1']['mode'] == 'exhaustif', info['k1']
+
+    # --- (b) l'ancien tirage a dix ne les contient pas ----------------
+    # Reproduction fidele du bloc supprime, avec le RNG que l'ancien code
+    # utilisait. Chaque graine simule UN scan. On n'exige pas zero -- le
+    # tirage peut tomber juste, c'est le propre d'une loterie -- mais on
+    # mesure a quelle frequence, et on exige qu'aucune graine ne sorte les
+    # trois. C'est la forme quantifiee de l'enonce : le resultat principal
+    # du projet tenait a un tirage qui reussit une fois sur mille.
+    m, r_B = 5, 5
+    cles_cibles = {cle(v) for v in CIBLES.values()}
+    n_graines = 2000
+    graines_avec = 0
+    graines_avec_tout = 0
+    for graine in range(n_graines):
+        rng = np.random.RandomState(graine)
+        trouves = set()
+        for _ in range(min(m * 3, 10)):
+            b = []
+            for _ in range(r_B):
+                q = [0] * m
+                i1 = rng.randint(0, m)
+                q[i1] = 1
+                i2 = (i1 + 1 + rng.randint(0, m - 1)) % m
+                q[i2] = rng.choice([-1, 0, 1])
+                b.append(q)
+            k = cle(b)
+            if k in cles_cibles:
+                trouves.add(k)
+        if trouves:
+            graines_avec += 1
+        if len(trouves) == len(cles_cibles):
+            graines_avec_tout += 1
+    assert graines_avec_tout == 0, \
+        (f"{graines_avec_tout} graines sur {n_graines} sortent les trois "
+         f"candidats : le tirage a dix suffirait, et cette correction "
+         f"serait sans objet")
+    assert graines_avec * 100 < n_graines, \
+        (f"le tirage a dix retrouve un candidat dans {graines_avec} scans "
+         f"sur {n_graines} : trop souvent pour parler de defaut de couverture")
+    taux = f"{graines_avec}/{n_graines}"
+
+    # --- independance au RNG amont -----------------------------------
+    # Meme seed, etat amont different : la sortie doit etre IDENTIQUE.
+    # C'est precisement ce qui etait faux, et qui a coute les candidats.
+    a = [cle(mo.b_charges) for mo in generate_monads(4, 3, max_charge=3,
+                                                     n_random=20, seed=11)]
+    parasite = np.random.RandomState(0)
+    parasite.randint(0, 100, size=1234)
+    b = [cle(mo.b_charges) for mo in generate_monads(
+        4, 3, max_charge=3, n_random=20, seed=11, rng=parasite)]
+    assert a == b, "la sortie depend encore d'un RNG externe"
+    c_ = [cle(mo.b_charges) for mo in generate_monads(4, 3, max_charge=3,
+                                                      n_random=20, seed=12)]
+    assert a != c_, "seed ignore : le generateur ne depend plus d'aucune graine"
+
+    # --- le comptage prealable est exact ------------------------------
+    # `_compte_multisets_unite` decide si une strate tient sous le plafond.
+    # S'il surestimait, une strate enumerable serait echantillonnee en
+    # silence ; s'il sous-estimait, le plafond ne protegerait rien.
+    n_cmp = 0
+    for mm in (2, 3, 4, 5):
+        for t in (3, 4, 5):
+            for bm in (1, 2, 3):
+                attendu = sum(1 for _ in _multisets_unite(mm, t, bm))
+                assert _compte_multisets_unite(mm, t, bm) == attendu, \
+                    (mm, t, bm, _compte_multisets_unite(mm, t, bm), attendu)
+                n_cmp += 1
+
+    # --- le plafond declare, il ne se tait pas ------------------------
+    # Force l'echantillonnage des deux strates et verifie que `stats` le
+    # DIT. Un plafond silencieux serait exactement le defaut du §8.
+    # `n_echantillon` est volontairement minuscule : avec sa valeur par
+    # defaut, 2 000 tirages sur un espace de 101 le couvrent entierement
+    # et `produit == total` -- le test ne verrait plus la difference entre
+    # « enumere » et « echantillonne au complet par chance ».
+    st2 = {}
+    familles_unite(5, 5, 3, plafond=1, plafond_perturbe=1, n_echantillon=5,
+                   rng=np.random.RandomState(0), stats=st2, cle='x')
+    inf2 = st2['familles_unite']['x']
+    assert inf2['k0']['mode'] == 'echantillonne', inf2['k0']
+    assert inf2['k1']['mode'] == 'echantillonne', inf2['k1']
+    assert inf2['k0']['total'] > inf2['k0']['produit'], inf2['k0']
+    assert inf2['k2+']['mode'] == 'non_couvert', inf2['k2+']
+
+    return (f"3/3 candidats enumeres (k0 {info['k0']['total']}, "
+            f"k1 {info['k1']['total']}) ; ancien tirage : {taux} scans en "
+            f"trouvaient un, 0 les trois ; {n_cmp} comptages exacts ; "
+            f"plafond declare")
 
 
 # ======================================================================

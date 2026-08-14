@@ -54,27 +54,16 @@ from typing import List, Optional
 
 from itertools import product as _iproduct
 
-from cy_landscape.core.monads import MonadBundle
+# `_mix` et `_UINT32` sont maintenant definis dans monads.py : ce module-la
+# en a besoin aussi (RNG derive de `generate_monads`) et il est importe ici,
+# donc les y placer est le seul ordre qui evite l'import circulaire. Ils
+# restent exposes sous ces noms, ou tous les appelants les cherchent.
+from cy_landscape.core.monads import MonadBundle, _mix, _UINT32
 
 GENERATOR_VERSION = 2
 
-_UINT32 = 2 ** 31 - 1
 # Au-dela de cette taille, on n'enumere plus l'espace des c en memoire.
 _MAX_ENUMERABLE = 2_000_000
-
-
-def _mix(seed, c_tuple, r_B):
-    """
-    Graine deterministe derivee de (seed, c, r_B).
-
-    N'utilise PAS hash() : le hachage des tuples Python est randomise par
-    processus (PYTHONHASHSEED), ce qui rendrait les tirages differents
-    d'un worker a l'autre et non reproductibles entre deux lancements.
-    """
-    h = (seed * 1_000_003 + r_B * 7919 + 2_166_136_261) & 0xFFFFFFFF
-    for v in c_tuple:
-        h = ((h ^ (int(v) + 0x9E3779B9)) * 16_777_619) & 0xFFFFFFFF
-    return h % _UINT32
 
 
 def is_positive_monad(monad):

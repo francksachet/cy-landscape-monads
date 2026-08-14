@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 33 tests.
+> non une propriété des candidats, et la suite compte 34 tests.
 
 ---
 
@@ -33,6 +33,14 @@ Point de départ : scan `scan_wilson2` sur les 194 CICYs à symétrie librement
 agissante (classification de Braun, JHEP 1104 (2011) 005), 122 min sur 7 cœurs.
 115 fibrés Hoppe-stables, 0 rejeté par l'audit, 108 passant le test nécessaire
 sur les charges.
+
+> **Reproductibilité (§5.23).** Ces deux candidats sortaient d'un générateur qui
+> tirait **dix** configurations au hasard dans une famille de 2 201, sur un RNG
+> partagé — ils ont d'ailleurs disparu du scan suivant, sans qu'aucun filtre ne
+> les élimine. La famille est maintenant **énumérée** : leur présence est
+> démontrée et non plus tirée au sort. Le scan qui fait foi est `scan_wilson4`,
+> à relancer (§9) ; `scan_wilson2` reste la seule trace produite avant la
+> correction.
 
 Balayage d'équivariance sur ces 108 candidats (≈ 1 h, mono-cœur) : 71 dans le
 domaine du modèle S/I, 3 878 couples (candidat, symétrie, λ).
@@ -126,7 +134,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        33 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        34 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -1438,6 +1446,93 @@ explicite qui renvoie vers `main_optimized`.
 
 ---
 
+### 5.23 Le résultat principal du projet avait été trouvé par une loterie à dix tirages
+
+C'est le défaut le plus grave trouvé jusqu'ici, et il ne se voit dans aucun
+résultat : il se voit dans une **absence**.
+
+**Le symptôme.** `scan_wilson3` (194 CICYs, 152,8 min, 49 entrées) ne contient
+**ni #6890, ni #6947, ni #6715** — les trois candidats sur lesquels reposent
+le §2 et une bonne part du §5. Vérification faite un filtre après l'autre :
+non-dégénérescence, |χ| = 6, annulation d'anomalie (déficits (10, 18, 22, 18, 28)
+et (22, 18, 10, 18, 36), donc effectifs), `check_map_exists`, `hoppe_fast` avec
+et sans D. **Ils passent tout.** Ils n'ont pas été éliminés : ils n'ont pas été
+**engendrés**.
+
+**La cause.** Le catalogue les étiquette `type: monad`, donc générateur
+*classique*. Dans `generate_monads`, ils sortaient du bloc « monades
+anti-symétriques » :
+
+```python
+for _ in range(min(m * 3, 10)):        # DIX tirages
+    ...
+    i1 = rng.randint(0, m)             # sur le RNG PARTAGE
+```
+
+Deux défauts en une ligne.
+
+1. **Couverture.** La famille visée — des `b_i` de la forme e_a, ou e_a ± e_b —
+   compte, pour m = 5 et r_B = 5, **101 multiensembles** dans sa strate pure et
+   **2 100** en autorisant un vecteur perturbé. Dix tirages en voyaient dix.
+2. **Reproductibilité.** Le RNG étant partagé avec `generate_positive_monads`,
+   la valeur des dix tirages dépendait de **ce que le générateur positif avait
+   consommé avant**. La correction du §5.11 — qui ne touchait que le générateur
+   positif — a redistribué la loterie. Les candidats sont tombés du mauvais côté.
+
+Mesure de la loterie, sur 5 000 scans simulés : le tirage à dix trouvait **au
+moins un** des trois candidats dans **6 scans**, jamais deux, jamais trois.
+Une chance sur mille.
+
+> **Le résultat principal du projet n'était pas reproductible.** Il n'était pas
+> faux — les trois candidats sont bien là, et passent tout — mais sa présence
+> dans un scan tenait au tirage. C'est exactement la leçon du §5.11, jamais
+> appliquée à ce générateur-ci.
+
+**La correction.** La famille est **énumérée**, par strates selon le nombre de
+vecteurs perturbés, parce que la famille complète ne l'est pas (pour m = 5,
+r_B = 6, elle dépasse déjà 2 000 000 de multiensembles à |c₁(B)|∞ ≤ 3) :
+
+| strate | contenu | plafond | état sur les 194 CICYs |
+|---|---|---|---|
+| **k = 0** | tous les `b_i` sont des e_a | `--unite-max` (200 000) | **exhaustive partout** (m ≤ 10) |
+| **k = 1** | un `b_i` de la forme e_a ± e_b | `--unite-perturbe-max` (20 000) | exhaustive jusqu'à m = 6, soit **158 des 194** |
+| **k ≥ 2** | — | — | jamais énumérée, **déclarée** comme telle |
+
+#6890 = {e₁, e₂, e₂, e₂, e₃} et #6947 = {e₀, e₀, e₀, e₁, e₃} sont dans la strate
+pure ; #6715 = {e₃, e₃, e₀, e₀+e₂, e₃} a un vecteur perturbé et vient de k = 1.
+Les trois sont désormais **démontrés présents**, pas trouvés.
+
+`generate_monads` reçoit en outre un **RNG dérivé** de (seed, m, max_charge,
+rank_V, r_C), comme `generate_positive_monads` depuis le §5.11. Une modification
+de l'un ne peut plus déplacer ce que produit l'autre.
+
+**Coût.** Le générateur rend de 900 (m = 1) à ~47 000 (m = 6) monades par CICY,
+contre ~110 avant. Vérifié de bout en bout sur les trois CICYs : 5,3 min
+cumulées à trois cœurs, 367 fibres Hoppe-stables, **les trois candidats
+retrouvés**. Sur 194 CICYs, compter environ une heure à huit cœurs.
+
+**Ce que chaque résultat déclare maintenant.** Champ `unite_strates` :
+`{'k0': [mode, produit, total], 'k1': [...], 'k2+': ['non_couvert', 0, None]}`.
+Le générateur est un filtre comme un autre, et c'est celui qui a fait disparaître
+les candidats sans qu'une ligne le signale. Sans ce champ, une absence dans un
+scan reste ininterprétable — règle des filtres, §8.
+
+**`max_charge = 3` est figé** pour ce générateur et ne suit pas `--max-charge`
+(qui n'atteint que le générateur positif). C'est la borne sous laquelle la
+famille est énumérée et sous laquelle les candidats ont été trouvés ; la rendre
+variable changerait la famille énumérée sans que rien ne le déclare.
+
+**Le test (34ᵉ) porte deux verdicts opposés**, et c'est le second qui lui donne
+sa valeur : l'énumération contient les trois candidats, **et** l'ancien tirage à
+dix ne les contient pas (2 scans sur 2 000 en trouvaient un, aucun les trois).
+Sans le second, le test passerait aussi bien avec un générateur qui les aurait
+trouvés par hasard. Il vérifie de plus l'indépendance au RNG amont, l'exactitude
+du comptage préalable qui décide du plafond (36 cas), et qu'un plafond atteint
+se **déclare**. Les trois sabotages essayés — strate k = 1 désactivée, RNG
+partagé restauré, comptage faussé de +1 — le font échouer.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -1504,7 +1599,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 33 tests, ~1 min. À lancer après chaque modification,
+**`tests_regression.py` — 34 tests, ~2 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -1560,7 +1655,7 @@ Corollaires pratiques :
 **Un filtre doit déclarer combien il a laissé passer, et pourquoi.** Sans cela,
 son silence se lit comme une sélection.
 
-C'est le défaut le plus fréquent de ce dépôt — six occurrences, toutes de la
+C'est le défaut le plus fréquent de ce dépôt — sept occurrences, toutes de la
 même forme : une condition devient vide, ou universellement vraie, et rien ne
 le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 
@@ -1572,6 +1667,11 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | §5.13 | recherche de témoin J sur une grille trop petite | « 24 % des fibrés sont déstabilisés » |
 | §5.17 | marge exactement nulle, falsy en Python | les degrés certifiants des deux candidats, écartés |
 | §5.18 | `groupes_utiles` vide ⇒ repli sur **tous** les groupes | 95,5 % des couples calculés hors cible, certains marqués `SURVIT` |
+| **§5.23** | **le générateur lui-même : 10 tirages sur une famille de 2 201** | **« ces fibrés n'existent pas sur ces CICYs »** — alors qu'ils n'avaient pas été engendrés |
+
+La septième est la plus coûteuse : c'est un filtre qu'on n'avait pas identifié
+comme tel. Un générateur incomplet ne se distingue d'un résultat d'absence par
+aucune trace dans le fichier de sortie.
 
 Deux d'entre eux ont produit un chiffre publiable qui n'existait pas. Aucun
 n'aurait été trouvé en relisant le code : tous l'ont été en demandant au filtre
@@ -1612,6 +1712,14 @@ python validate_cohomology.py cicylist.txt --n-cicys 60 --max-charge 4
 python wilson_match.py CicyQuotients.m cicylist.txt --results scan/results_clean.jsonl
 python -m cy_landscape.main_optimized cicylist.txt -j 7 --output scan_wilson2 --reset \
        --wilson wilson_cicys.json --max-charge 5 --n-random 5000
+
+# LE MÊME, générateur classique énuméré (§5.23) — c'est celui-ci qu'il faut
+# relancer : scan_wilson3 a perdu #6890, #6947 et #6715 faute de les engendrer.
+# Compter ~1 h à 8 cœurs. NE PAS écraser scan_wilson2, seule trace des trois.
+# (PowerShell : accent grave en continuation de ligne)
+python -u -m cy_landscape.main_optimized cicylist.txt -j 7 --output scan_wilson4 --reset `
+       --wilson wilson_cicys.json --max-charge 5 --n-random 5000 |
+       Tee-Object -FilePath scan_wilson4.log
 
 # scan ordinaire
 python -m cy_landscape.main_optimized cicylist.txt --max-ps 6 -j 7 --output scan --reset \

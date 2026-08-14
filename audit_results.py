@@ -270,6 +270,8 @@ def main():
               f"  (rank_C = 1, wedge2 exact)")
 
         pool = exact or clean
+        # `exotics` peut valoir None (non calcule). Le tri le renvoie en
+        # queue plutot que de le confondre avec 0, qui vaudrait « propre ».
         pool.sort(key=lambda r: (r.get('higgs', 99) if r.get('higgs', 0) > 0 else 99,
                                  -r.get('score', 0)))
         print(f"\n  Top {args.top} (Higgs faible d'abord, Higgs > 0 requis "
@@ -278,7 +280,8 @@ def main():
               f"{'H':>4} {'exo':>3} {'cohomologie':>16} {'score':>6}")
         for r in pool[:args.top]:
             print(f"    {r['cicy']:>6} {r['type']:<10} {r['gauge']:>7} "
-                  f"{r['rank_V']:>2} {r.get('higgs',0):>4} {r.get('exotics',0):>3} "
+                  f"{r['rank_V']:>2} {r.get('higgs',0):>4} "
+                  f"{('?' if r.get('exotics') is None else r.get('exotics',0)):>3} "
                   f"{str(r.get('cohomology')):>16} {r.get('score',0):>6}")
 
     clean_path = os.path.join(args.output_dir, 'results_clean.jsonl')

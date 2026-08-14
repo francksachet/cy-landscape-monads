@@ -1780,6 +1780,106 @@ def t_n_gen_quotient():
 
 
 # ======================================================================
+# 11 terdecies. Quantites non calculees : None, jamais zero
+# ======================================================================
+
+@test("classement : exotiques et singlets non calcules valent None, pas 0")
+def t_quantites_non_calculees():
+    """
+    Trois nombres du classement etaient des CONSTANTES deguisees en
+    resultats (§4.8). Un zero de remplissage se lit comme une qualite du
+    modele -- « pas d'exotiques », « pas de singlets » -- et rapportait des
+    points.
+
+    ----------------------------------------------------------------------
+    (a) Les exotiques SU(5), identiquement nuls -- demonstration
+    ----------------------------------------------------------------------
+    La formule etait max(0, n_10 + n_10bar - n_gen - 2*n_anti) avec
+    n_gen = |a - b| et n_anti = min(a, b). Or
+
+        |a - b| + 2*min(a, b) = a + b   pour TOUS a, b >= 0
+
+    donc l'expression vaut zero quels que soient les nombres. Le test le
+    verifie sur une grille, pour que l'enonce ne repose pas sur l'algebre
+    seule.
+
+    ----------------------------------------------------------------------
+    (b) Les exotiques SO(10) etaient codes en dur a 0
+    (c) Les singlets venaient de `end_V`, valeur de remplissage rank^2 - 1
+    (d) Les Higgs E6 portaient un 3 CODE EN DUR
+    ----------------------------------------------------------------------
+    `max(0, n_gen - 3)` melangeait deux etages : en mode Wilson, n_gen est
+    le compte EN AMONT du quotient (6, 9, 27...) et le 3 est le compte
+    VOULU en aval. Avec n_gen = 6 et n_anti = 0, l'ancienne formule
+    fabriquait 3 Higgs a partir de rien.
+
+    Deux verdicts OPPOSES : E6 doit CONSERVER un compte d'exotiques reel
+    (c'est le seul cas ou les anti-generations sont effectivement
+    comptees), SO(10) et SU(5) doivent rendre None. Un test qui exigerait
+    None partout passerait pour un module qui ne calcule plus rien.
+    """
+    from cy_landscape.core.cohomology import (extract_spectrum_su5,
+                                              extract_spectrum_so10,
+                                              extract_spectrum_e6)
+
+    # (a) la formule d'origine est identiquement nulle
+    n_cas = 0
+    for a in range(0, 12):
+        for b in range(0, 12):
+            n_gen, n_anti = abs(a - b), min(a, b)
+            assert max(0, a + b - n_gen - 2 * n_anti) == 0, (a, b)
+            n_cas += 1
+    assert n_cas >= 100, n_cas
+
+    def spectre(f, h1V, h1dual, h1w2, end_V=None):
+        return f({"V": {0: 0, 1: h1V, 2: 0, 3: 0},
+                  "V_dual": {0: 0, 1: h1dual, 2: 0, 3: 0},
+                  "wedge2V": {0: 0, 1: h1w2, 2: 0, 3: 0},
+                  "end_V": end_V})
+
+    # (b) SO(10) et SU(5) : non calcules -> None, et AUCUN point
+    for f, nom in ((extract_spectrum_so10, 'SO(10)'),
+                   (extract_spectrum_su5, 'SU(5)')):
+        sp = spectre(f, 6, 0, 8)
+        assert sp.n_exotics is None, (nom, sp.n_exotics,
+                                      "un zero de remplissage est revenu")
+        assert sp.exotic_free is False, (nom, "credite « sans exotiques » "
+                                              "sans les avoir comptes")
+        sp0 = spectre(f, 6, 0, 8)
+        sp0.n_exotics = 0
+        sp0.compute_sm_compatibility()
+        assert sp0.sm_compatibility > sp.sm_compatibility, (
+            nom, "les 25 points des exotiques ne sont plus distinctifs : "
+                 "le test ne mesure plus rien")
+
+    # (c) singlets : None sans end_V, et rien au score
+    sp = spectre(extract_spectrum_so10, 6, 0, 8)
+    assert sp.n_singlets is None, sp.n_singlets
+    sp_avec = spectre(extract_spectrum_so10, 6, 0, 8, end_V={0: 1, 1: 5})
+    assert sp_avec.n_singlets == 5, sp_avec.n_singlets
+    assert sp_avec.sm_compatibility > sp.sm_compatibility, \
+        "un end_V reel ne change rien au score : le champ est ignore"
+
+    # (d) E6 : verdict OPPOSE -- les exotiques y sont REELLEMENT comptes
+    e6 = spectre(extract_spectrum_e6, 9, 2, 0)
+    assert e6.n_exotics == 2, (e6.n_exotics, "E6 compte ses anti-generations ; "
+                                             "les mettre a None perdrait la "
+                                             "seule information reelle")
+    # ... et le 3 code en dur a disparu : n_gen = 6, n_anti = 0 -> 0 Higgs
+    e6b = spectre(extract_spectrum_e6, 6, 0, 0)
+    assert e6b.n_generations == 6, e6b.n_generations
+    assert e6b.n_higgs_candidates == 0, (
+        e6b.n_higgs_candidates,
+        "le 3 code en dur est revenu : max(0, n_gen - 3) fabrique des Higgs "
+        "en melangeant le compte amont et le compte voulu en aval")
+
+    return (f"{n_cas} couples (a, b) : la formule SU(5) est identiquement "
+            f"nulle ; SO(10) et SU(5) rendent None et ne touchent plus les "
+            f"25 points ; E6 conserve n_exotics = n_anti ; le 3 en dur des "
+            f"Higgs E6 a disparu")
+
+
+# ======================================================================
 # 12. Ordre projectif et racines n-iemes
 # ======================================================================
 

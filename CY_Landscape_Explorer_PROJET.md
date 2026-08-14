@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 31 tests.
+> non une propriété des candidats, et la suite compte 32 tests.
 
 ---
 
@@ -118,7 +118,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        31 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        32 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -228,8 +228,9 @@ Dans `cohomology.py` : `sp.n_exotics = 0` en dur pour SO(10) ; pour SU(5),
 |a−b| + 2·min(a,b) = a+b. Seul E₆ compte réellement ses anti-générations.
 
 Le « zéro exotique » de tous les candidats SO(10) et SU(5) est donc une
-constante, pas un résultat — et il vaut 25 points gratuits dans le score.
-**Non corrigé** (voir §6).
+constante, pas un résultat — et il valait 25 points gratuits dans le score.
+**Corrigé (§5.19)** : ces quantités valent désormais `None`, et une quantité non
+calculée ne rapporte plus rien.
 
 ### 4.9 `sections.py` — `reduce_vec` ne réduisait rien
 
@@ -1212,6 +1213,42 @@ lignes), `#2565`, et les λ non retenus de `#6890` et `#6947`. **160 couples son
 Le §2 tient, pour la troisième fois de suite et sur une chaîne à chaque fois plus
 exigeante.
 
+
+### 5.19 Trois constantes déguisées en résultats
+
+Trois nombres du classement n'en étaient pas. Ils ne faussaient pas la
+sélection — les candidats retenus le sont sur d'autres critères — mais ils
+faussaient le **tri**, et deux d'entre eux rapportaient des points.
+
+**Les exotiques SU(5)** : `max(0, n_10 + n_10bar − n_gen − 2·n_anti)`, avec
+n_gen = |a−b| et n_anti = min(a,b). Or |a−b| + 2·min(a,b) = a+b pour tous
+a, b ≥ 0 : l'expression vaut **identiquement zéro**. Vérifié sur 144 couples
+dans le test, pour que l'énoncé ne repose pas sur la seule algèbre.
+
+**Les exotiques SO(10)** : codés en dur à 0.
+
+**Les singlets** : lus dans `end_V`, qui était une valeur de remplissage —
+rank_V² − 1 — puisque h¹(End V) n'est pas calculé.
+
+Les deux premiers valaient **25 points** de score à tout SO(10) et tout SU(5),
+le troisième jusqu'à 10. Tous trois valent maintenant `None`, et
+`compute_sm_compatibility` n'accorde de points qu'à une quantité réellement
+calculée. **E₆ conserve son compte d'exotiques** — n_anti y est effectivement
+calculé, c'est le seul cas — et c'est le verdict opposé qui rend le test
+discriminant.
+
+**Un quatrième, sur les Higgs E₆** : `max(0, n_gen − 3) + n_anti`, avec un 3
+**codé en dur**. En mode Wilson, n_gen est le compte **en amont** du quotient
+— 6, 9, 27… — et le 3 est le compte **voulu en aval** : la soustraction mélange
+deux étages. Avec n_gen = 6 et n_anti = 0, elle fabriquait 3 Higgs à partir de
+rien. Les Higgs d'un E₆ viennent des paires 27 + 27̄, donc de n_anti seul ; avec
+ligne de Wilson ils sortent de la décomposition des 27 sous Γ, qui n'est pas
+calculée ici (§6).
+
+Effet sur le scan de contrôle : les scores des E₆ passent de 92,5 à 87,5 — les
+10 points de singlets inventés disparaissent, les 25 points d'exotiques restent
+car ils y sont mérités.
+
 ---
 
 ## 6. Ce qui reste faux ou absent
@@ -1233,9 +1270,9 @@ exigeante.
 | surjectivité au rang 5 | **le mur était dans la liste des multidegrés** (§5.17), et le balayage corrigé (§5.18) ramène les indéterminés de 449 à **21**. Reste ouverte, et indépendante de l'équivariance (§4.6), la question « le catalogue contient-il des monades non surjectives ? » |
 | filtre d'indice | **corrigé** (§5.18) : plus de repli silencieux sur tous les groupes, raison persistée, et le verdict porte n_gen(X/Γ). 73 candidats sont écartés explicitement faute de groupe d'ordre compatible |
 | domaine du modèle S/I | 37 candidats sur 108 hors domaine, faute de charges positives, dont `#5452`, `#6826`, `#7745`, `#7669`. Ni retenus ni éliminés. Élargir demande de passer par Koszul plutôt que par le quotient monomial |
-| `end_V` (nombre de singlets) | valeur de remplissage codée en dur — **sans aucune valeur** |
-| exotiques SO(10) et SU(5) | structurellement nuls (§4.8) — fausse le classement, pas la sélection |
-| colonne `H` en mode Wilson | calcule `max(0, n_gen − 3)` avec le 3 en dur ; en amont n_gen vaut 6, 9, 27… donc le chiffre affiché n'a pas de sens physique |
+| `end_V` (nombre de singlets) | **corrigé (§5.19)** : vaut `None`, et ne rapporte plus de points. h¹(End V) reste non calculé |
+| exotiques SO(10) et SU(5) | **corrigé (§5.19)** : `None` au lieu d'un zéro structurel, plus de 25 points gratuits. E₆ conserve son compte réel |
+| Higgs E₆ en mode Wilson | **corrigé (§5.19)** : le 3 codé en dur est supprimé. Le compte avec ligne de Wilson demanderait la décomposition des 27 sous Γ, non calculée |
 | h^i hors certification | ~52 % des cas — d_r (r ≥ 2) ou ambiguïté de rang |
 | couplages de Yukawa | hors périmètre |
 
@@ -1279,7 +1316,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 31 tests, ~1 min. À lancer après chaque modification,
+**`tests_regression.py` — 32 tests, ~1 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -1329,6 +1366,48 @@ Corollaires pratiques :
 - Ne jamais interpréter un chiffre sans mesurer ce qui le borne. Le « lieu de
   base » du §5.4 était un artefact de source insuffisante, et le contrôle qui l'a
   démenti coûtait trois lignes.
+
+### La règle des filtres
+
+**Un filtre doit déclarer combien il a laissé passer, et pourquoi.** Sans cela,
+son silence se lit comme une sélection.
+
+C'est le défaut le plus fréquent de ce dépôt — six occurrences, toutes de la
+même forme : une condition devient vide, ou universellement vraie, et rien ne
+le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
+
+| | ce qui devenait vide | ce que le silence faisait croire |
+|---|---|---|
+| §4.8 | exotiques SO(10) et SU(5), identiquement nuls | « modèle sans exotiques », et 25 points de score |
+| §5.3 | sous-espace équivariant, jamais vide quand Γ agit par phases | « le fibré descend au quotient » |
+| §5.12 | `deduplicate_results` indexait sur (B, C), absent des extensions | 2 647 candidats repliés sur 132 |
+| §5.13 | recherche de témoin J sur une grille trop petite | « 24 % des fibrés sont déstabilisés » |
+| §5.17 | marge exactement nulle, falsy en Python | les degrés certifiants des deux candidats, écartés |
+| §5.18 | `groupes_utiles` vide ⇒ repli sur **tous** les groupes | 95,5 % des couples calculés hors cible, certains marqués `SURVIT` |
+
+Deux d'entre eux ont produit un chiffre publiable qui n'existait pas. Aucun
+n'aurait été trouvé en relisant le code : tous l'ont été en demandant au filtre
+combien il avait laissé passer.
+
+D'où trois exigences, tenues par les tests :
+
+1. **Compter les deux côtés.** Un filtre rapporte ce qu'il retient *et* ce qu'il
+   écarte, avec le motif. `hoppe_twists` rend `n_twists` et `non_certifies` ;
+   `hoppe_suffisant_sur_espace` rend `sources_non_vides` — sans lui, un critère
+   suffisant vérifié sur des sources vides serait vrai sans rien démontrer.
+2. **Ne jamais remplacer par zéro ce qui n'est pas calculé.** `None` se voit,
+   `0` se lit comme une qualité. Les exotiques, les singlets, la cohomologie
+   non déterminée des extensions sont désormais `None`, et ne rapportent aucun
+   point.
+3. **Persister les lignes écartées, avec leur raison.** Un fichier de résultats
+   doit dire pourquoi un cas n'a pas été traité (§5.11, §5.18), faute de quoi
+   son silence se lit à tort comme une absence de candidats.
+
+Et le contrôle qui met tout cela à l'épreuve : **casser le filtre dans les deux
+sens.** Un module qui accepte tout et un module qui rejette tout doivent chacun
+faire tomber un volet différent du test. Sur les onze tests ajoutés depuis, cinq
+cassages « évidents » se sont révélés **passants** au premier essai — c'est en
+les voyant passer qu'on a trouvé le vrai angle mort.
 
 ---
 

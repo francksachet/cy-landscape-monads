@@ -198,8 +198,13 @@ class ParticleSpectrum:
     n_generations: int = 0
     n_anti_generations: int = 0
     n_higgs_candidates: int = 0
-    n_singlets: int = 0
-    n_exotics: int = 0
+    # `None` = NON CALCULE. Surtout pas 0 : un zero de remplissage se lit
+    # comme « pas d'exotiques » ou « pas de singlets », c'est-a-dire comme
+    # une qualite du modele. C'est le defaut §4.8 -- le « zero exotique »
+    # de tous les SO(10) et SU(5) etait une constante, pas un resultat, et
+    # il valait 25 points gratuits dans le score.
+    n_singlets: Optional[int] = None
+    n_exotics: Optional[int] = None
     generation_match: bool = False
     higgs_present: bool = False
     exotic_free: bool = False
@@ -224,18 +229,24 @@ class ParticleSpectrum:
             if self.n_higgs_candidates == 1:
                 score += 5.0
 
-        # Pas d'exotiques (25 pts)
-        if self.n_exotics == 0:
-            score += 25.0
-            self.exotic_free = True
-        elif self.n_exotics <= 2:
-            score += 10.0
+        # Pas d'exotiques (25 pts) -- UNIQUEMENT si le compte existe.
+        # Ces 25 points etaient acquis d'office a tout SO(10) et tout SU(5),
+        # dont le compte d'exotiques etait identiquement nul (§4.8). Une
+        # quantite non calculee ne rapporte plus rien.
+        if self.n_exotics is not None:
+            if self.n_exotics == 0:
+                score += 25.0
+                self.exotic_free = True
+            elif self.n_exotics <= 2:
+                score += 10.0
 
-        # Singlets moderes (10 pts)
-        if 1 <= self.n_singlets <= 20:
-            score += 10.0
-        elif self.n_singlets <= 50:
-            score += 5.0
+        # Singlets moderes (10 pts) -- idem : h^1(End V) n'est pas calcule,
+        # donc `n_singlets` vaut None et ne rapporte rien.
+        if self.n_singlets is not None:
+            if 1 <= self.n_singlets <= 20:
+                score += 10.0
+            elif self.n_singlets <= 50:
+                score += 5.0
 
         self.sm_compatibility = min(100.0, score)
 
@@ -246,13 +257,27 @@ class ParticleSpectrum:
             "n_generations": int(self.n_generations),
             "n_anti_generations": int(self.n_anti_generations),
             "n_higgs_candidates": int(self.n_higgs_candidates),
-            "n_singlets": int(self.n_singlets),
-            "n_exotics": int(self.n_exotics),
+            "n_singlets": None if self.n_singlets is None else int(self.n_singlets),
+            "n_exotics": None if self.n_exotics is None else int(self.n_exotics),
             "generation_match": bool(self.generation_match),
             "higgs_present": bool(self.higgs_present),
             "exotic_free": bool(self.exotic_free),
             "sm_compatibility": float(round(self.sm_compatibility, 1)),
         }
+
+
+def _singlets(cohom):
+    """
+    Nombre de singlets, ou None s'il n'est pas calcule.
+
+    Il vaut h^1(End V), que le pipeline ne calcule pas : `end_V` etait une
+    valeur de REMPLISSAGE codee en dur (rank_V^2 - 1). Un nombre invente
+    n'est pas un nombre -- on renvoie None, et le score ne le compte pas.
+    """
+    ev = cohom.get("end_V")
+    if not ev:
+        return None
+    return ev.get(1, 0)
 
 
 def extract_spectrum_su5(cohom):
@@ -261,19 +286,25 @@ def extract_spectrum_su5(cohom):
     n_10bar = cohom["V_dual"].get(1, 0)
     n_5bar = cohom["wedge2V"].get(1, 0)
     n_5 = cohom["wedge2V"].get(2, 0)
-    n_singlets = cohom["end_V"].get(1, 0)
+    n_singlets = _singlets(cohom)
 
     sp.representations = {
         "10": n_10, "10bar": n_10bar,
-        "5bar": n_5bar, "5": n_5, "1": n_singlets,
+        "5bar": n_5bar, "5": n_5,
     }
+    if n_singlets is not None:
+        sp.representations["1"] = n_singlets
     sp.n_generations = abs(n_10 - n_10bar)
     sp.n_anti_generations = min(n_10, n_10bar)
     gen_5bar = min(n_5bar, sp.n_generations)
     excess_5bar = max(0, n_5bar - gen_5bar)
     sp.n_higgs_candidates = min(n_5, excess_5bar)
     sp.n_singlets = n_singlets
-    sp.n_exotics = max(0, n_10 + n_10bar - sp.n_generations - sp.n_anti_generations * 2)
+    # La formule d'origine, max(0, n_10 + n_10bar - n_gen - 2*n_anti), vaut
+    # IDENTIQUEMENT ZERO : avec n_gen = |a-b| et n_anti = min(a,b), on a
+    # |a-b| + 2*min(a,b) = a+b. Elle ne mesurait rien. Le compte reel
+    # demanderait H^1(End V), non calcule -> None.
+    sp.n_exotics = None
     sp.compute_sm_compatibility()
     return sp
 
@@ -283,16 +314,19 @@ def extract_spectrum_so10(cohom):
     n_16 = cohom["V"].get(1, 0)
     n_16bar = cohom["V_dual"].get(1, 0)
     n_10 = cohom["wedge2V"].get(1, 0)
-    n_singlets = cohom["end_V"].get(1, 0)
+    n_singlets = _singlets(cohom)
 
     sp.representations = {
-        "16": n_16, "16bar": n_16bar, "10": n_10, "1": n_singlets,
+        "16": n_16, "16bar": n_16bar, "10": n_10,
     }
     sp.n_generations = abs(n_16 - n_16bar)
     sp.n_anti_generations = min(n_16, n_16bar)
     sp.n_higgs_candidates = n_10
     sp.n_singlets = n_singlets
-    sp.n_exotics = 0
+    # Etait code en dur a 0. Le compte reel d'exotiques SO(10) demanderait
+    # H^1(End V), non calcule -> None, et non un zero qui se lirait comme
+    # « modele propre ».
+    sp.n_exotics = None
     sp.compute_sm_compatibility()
     return sp
 
@@ -301,13 +335,22 @@ def extract_spectrum_e6(cohom):
     sp = ParticleSpectrum(gauge_group="E6")
     n_27 = cohom["V"].get(1, 0)
     n_27bar = cohom["V_dual"].get(1, 0)
-    n_singlets = cohom["end_V"].get(1, 0)
+    n_singlets = _singlets(cohom)
 
-    sp.representations = {"27": n_27, "27bar": n_27bar, "1": n_singlets}
+    sp.representations = {"27": n_27, "27bar": n_27bar}
+    if n_singlets is not None:
+        sp.representations["1"] = n_singlets
     sp.n_generations = abs(n_27 - n_27bar)
     sp.n_anti_generations = min(n_27, n_27bar)
-    sp.n_higgs_candidates = max(0, sp.n_generations - 3) + sp.n_anti_generations
-    sp.n_singlets = n_singlets + sp.n_generations
+    # `max(0, n_gen - 3)` portait un 3 CODE EN DUR. En mode Wilson, n_gen est
+    # le compte EN AMONT du quotient -- 6, 9, 27... -- et le 3 est le compte
+    # VOULU en aval : la soustraction melange deux etages et le chiffre
+    # affiche n'a aucun sens physique. Les Higgs d'un E6 viennent des paires
+    # 27 + 27bar, donc de n_anti seul ; avec ligne de Wilson ils sortent de
+    # la decomposition des 27 sous Gamma, qui n'est pas calculee ici.
+    sp.n_higgs_candidates = sp.n_anti_generations
+    sp.n_singlets = None if n_singlets is None else n_singlets + sp.n_generations
+    # Seul cas ou les anti-generations sont reellement comptees.
     sp.n_exotics = sp.n_anti_generations
     sp.compute_sm_compatibility()
     return sp

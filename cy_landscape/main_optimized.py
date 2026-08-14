@@ -251,7 +251,7 @@ def process_cicy(args):
                         # Le spectre detaille (Higgs, exotiques) demanderait
                         # H^1(w^2 V) : non calcule sur cette branche.
                         'higgs': 0, 'higgs_certifie': False,
-                        'exotics': 0, 'reps': {},
+                        'exotics': None, 'singlets': None, 'reps': {},
                         'score': 30 + 25 + 2,
                         'gen': GENERATOR_VERSION,
                         # DEMONTRE sur le domaine, ou simple sondage : sans
@@ -366,13 +366,14 @@ def process_cicy(args):
                 # le resultat dit si le nombre de Higgs veut dire quelque chose.
                 w2V = {i: int(w2V.get(i, 0)) for i in range(4)}
 
-                # end_V reste une valeur de remplissage : h^1(End V) n'est pas
-                # calcule. Le nombre de singlets qui en decoule n'a aucune
-                # valeur -- conserve uniquement pour ne pas casser l'appel.
-                end_V = {0:1, 1: max(1, rank_V**2-1), 2: max(1, rank_V**2-1), 3:1}
+                # end_V = None : h^1(End V) n'est PAS calcule. L'ancienne
+                # valeur de remplissage, rank_V^2 - 1 codee en dur, produisait
+                # un nombre de singlets invente -- et un nombre invente n'est
+                # pas un nombre. `extract_spectrum_*` renvoie desormais
+                # n_singlets = None, et le score ne lui accorde rien.
                 fmt = {"V": {i: cohom[i] for i in range(4)},
                        "V_dual": {i: cohom[3-i] for i in range(4)},
-                       "wedge2V": w2V, "end_V": end_V}
+                       "wedge2V": w2V, "end_V": None}
 
                 if gauge == "SU(5)": sp = extract_spectrum_su5(fmt)
                 elif gauge == "SO(10)": sp = extract_spectrum_so10(fmt)
@@ -388,7 +389,11 @@ def process_cicy(args):
                     'ambient': "x".join(f"P{n}" for n in c['ambient']),
                     'rank_V': rank_V, 'gauge': gauge,
                     'n_gen': int(sp.n_generations), 'higgs': int(sp.n_higgs_candidates),
-                    'exotics': int(sp.n_exotics), 'score': round(score, 1),
+                    # None = non calcule (§4.8). Jamais 0 : un zero se lirait
+                    # comme « pas d'exotiques », donc comme une qualite.
+                    'exotics': None if sp.n_exotics is None else int(sp.n_exotics),
+                    'singlets': None if sp.n_singlets is None else int(sp.n_singlets),
+                    'score': round(score, 1),
                     'cohomology': [int(cohom[i]) for i in range(4)],
                     'reps': {k: int(v) for k, v in sp.representations.items() if v > 0},
                     'b_charges': [list(b) for b in monad.b_charges],
@@ -965,7 +970,9 @@ def main():
         for i, r in enumerate(all_results[:10]):
             print(f"  {i+1:>2} {r['type']:<12} #{r['cicy']:>4} "
                   f"({r['h11']:>2},{r['h21']:>2}) rk{r['rank_V']} {r['gauge']:>7} "
-                  f"H={r['higgs']:>2} E={r['exotics']:>1} score={r['score']}")
+                  f"H={r['higgs']:>2} "
+                  f"E={('?' if r.get('exotics') is None else r['exotics']):>1} "
+                  f"score={r['score']}")
 
     export = {
         'parameters': vars(args),

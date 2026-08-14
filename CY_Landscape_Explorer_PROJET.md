@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 30 tests.
+> non une propriété des candidats, et la suite compte 31 tests.
 
 ---
 
@@ -118,7 +118,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        30 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        31 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -1155,6 +1155,63 @@ marché : le rejeu avance environ dix fois plus lentement (141 lignes en 32 min,
 contre 4 130 en 95 min). Le balayage complet demandera plusieurs heures. C'est le
 prix d'un critère qui peut aboutir, contre un qui ne le pouvait pas.
 
+
+### 5.18 Le filtre d'indice retombait sur tous les groupes sans le dire
+
+`equivariance_f.py` limitait les symétries testées à celles dont l'ordre est
+compatible avec l'indice — sauf que :
+
+```python
+groupes = set(r.get('groupes_utiles') or [])
+if groupes is not None and not groupes:
+    groupes = set(r.get('equivariant_possible') or [])   # repli SILENCIEUX
+```
+
+Faute de groupe d'ordre compatible, il les essayait **tous**. Mesure sur le
+balayage du §5.16 :
+
+| couples évalués | 4 076 |
+|---|---|
+| indice compatible (\|χ\| = 3·\|Γ\|) | **184** |
+| indice **incompatible** | **3 892 — 95,5 %** |
+| candidats distincts avec au moins un groupe compatible | **12**, sur 8 CICYs |
+
+Ces 3 892 couples ne peuvent donner trois générations avec ce Γ, quel que soit
+le verdict. Le calcul les traitait quand même — et certains ressortaient
+étiquetés `SURVIT`. C'est ainsi que le §5.17 a d'abord annoncé des survivants
+SU(5) de rang 5 sur `#21` : ils sont stables, équivariants et surjectifs, et ils
+donnent **12 générations** (|χ| = 24 avec |Γ| = 2). Un filtre qui devient vide
+sans le dire, c'est le défaut du §4.8 sous une autre forme.
+
+**Deux corrections.** Le repli est supprimé : le candidat est écarté et **la
+raison persistée** dans le JSONL — un fichier de résultats doit dire pourquoi un
+cas n'a pas été traité (§5.11). Et le verdict porte désormais
+n_gen(X/Γ) = |χ(V)|/|Γ| : `SURVIT — 3 gen sur X/Gamma`. Sans ce nombre, un
+`SURVIT` ne dit rien du contenu physique.
+
+#### Balayage corrigé
+
+| | §5.16 | corrigé |
+|---|---|---|
+| lignes | 4 130 | 298 |
+| couples évalués | 4 076 | **184** |
+| écartés faute de groupe compatible | — (repli silencieux) | **73, tracés** |
+| indéterminés | 449 | **21** |
+| **survivants** | 3 | **3** |
+| durée | ~95 min | **~4 min** |
+
+Les trois survivants sont les mêmes, et le verdict le dit maintenant en toutes
+lettres : **`#6890` (deux entrées) et `#6947`, Γ = ℤ₂, λ = +1, 3 générations sur
+X/Γ**, certifiés surjectifs en (0,1,5,1,0) et (5,1,0,1,0).
+
+Les 449 indéterminés du §5.16 tombent à **21** — l'effet conjugué du §5.17 (les
+multidegrés viables) et de la suppression du bruit. Ils portent sur `#5259` (16
+lignes), `#2565`, et les λ non retenus de `#6890` et `#6947`. **160 couples sont
+éliminés franchement**, dont les 144 de `#7884` (E₆, ℤ₃×ℤ₃).
+
+Le §2 tient, pour la troisième fois de suite et sur une chaîne à chaque fois plus
+exigeante.
+
 ---
 
 ## 6. Ce qui reste faux ou absent
@@ -1173,7 +1230,8 @@ prix d'un critère qui peut aboutir, contre un qui ne le pouvait pas.
 | Modèle Standard hors de portée avec ℤ₂ | limitation de **principe** : les lignes de Wilson préservent le rang, SO(10) est de rang 5 et le MS de rang 4 (§5.8). Ces deux candidats plafonnent à Pati–Salam ou SU(5) flipped |
 
 | balayage complet avec Hoppe complet | **fait** (§5.16) : catalogue purgé par la phase des twists (115 → 114), chaîne relancée en entier, mêmes 3 couples survivants. Le §2 tient |
-| surjectivité au rang 5 | **le mur était dans la liste des multidegrés, pas dans la géométrie** (§5.17). Directions mixtes longues + sélection par viabilité : `#21` passe de quatre degrés à marge −42…−46 à quatre degrés viables, et le rang 5 rend des verdicts. **Rejeu complet en cours** — plusieurs heures, les degrés viables étant bien plus gros. La question « le catalogue contient-il des monades non surjectives ? » reste ouverte et indépendante de l'équivariance (§4.6) |
+| surjectivité au rang 5 | **le mur était dans la liste des multidegrés** (§5.17), et le balayage corrigé (§5.18) ramène les indéterminés de 449 à **21**. Reste ouverte, et indépendante de l'équivariance (§4.6), la question « le catalogue contient-il des monades non surjectives ? » |
+| filtre d'indice | **corrigé** (§5.18) : plus de repli silencieux sur tous les groupes, raison persistée, et le verdict porte n_gen(X/Γ). 73 candidats sont écartés explicitement faute de groupe d'ordre compatible |
 | domaine du modèle S/I | 37 candidats sur 108 hors domaine, faute de charges positives, dont `#5452`, `#6826`, `#7745`, `#7669`. Ni retenus ni éliminés. Élargir demande de passer par Koszul plutôt que par le quotient monomial |
 | `end_V` (nombre de singlets) | valeur de remplissage codée en dur — **sans aucune valeur** |
 | exotiques SO(10) et SU(5) | structurellement nuls (§4.8) — fausse le classement, pas la sélection |
@@ -1221,7 +1279,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 30 tests, ~1 min. À lancer après chaque modification,
+**`tests_regression.py` — 31 tests, ~1 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique

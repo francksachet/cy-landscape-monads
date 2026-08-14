@@ -100,6 +100,34 @@ def h0_V_generique(anneau, b_charges, c_charges, p, rng, n_essais=5):
     return meilleur
 
 
+def ordre_nom(nom):
+    """Ordre du groupe lu sur son nom de Braun ("Z2 x Z2" -> 4)."""
+    import re as _re
+    n = 1
+    for x in _re.findall(r'Z(\d+)', str(nom)):
+        n *= int(x)
+    return n
+
+
+def n_gen_quotient(cohomology, nom_groupe):
+    """
+    Nombre de generations sur X/Gamma : |chi(V)| / |Gamma|.
+
+    Gamma agissant librement, n_gen(X/Gamma) = n_gen(X)/|Gamma|. Sans ce
+    nombre, un verdict `SURVIT` ne dit RIEN du contenu physique : un fibre
+    peut etre stable, equivariant et surjectif tout en donnant 12
+    generations. Cas reel : #21, SU(5) de rang 5, |chi| = 24 avec Gamma =
+    Z2 -- douze generations, et pourtant `SURVIT`.
+    """
+    if not cohomology or len(cohomology) < 4:
+        return None
+    chi = abs(cohomology[1] - cohomology[2])
+    o = ordre_nom(nom_groupe)
+    if o <= 0 or chi == 0 or chi % o:
+        return None
+    return chi // o
+
+
 def analyser(cicy_num, amb, cfg, b, c, symetries, groupes=None, graine=0):
     """Renvoie une liste de lignes de resultat, une par (symetrie, lambda)."""
     lignes = []
@@ -299,9 +327,32 @@ def main():
         amb, cfg = e['ambient'], np.asarray(e['config'])
         b = [list(x) for x in r['b_charges']]
         c = [list(x) for x in r['c_charges']]
+        # PAS DE REPLI SILENCIEUX. La version precedente faisait :
+        #     if groupes is not None and not groupes:
+        #         groupes = set(r.get('equivariant_possible') or [])
+        # c'est-a-dire : faute de groupe d'ordre compatible avec l'indice,
+        # on les essayait TOUS, sans le dire. Mesure sur le balayage
+        # precedent : 3 892 couples sur 4 076 (95,5 %) avaient un indice
+        # incompatible -- ils ne peuvent donner trois generations avec ce
+        # Gamma, quel que soit le verdict -- et certains ressortaient
+        # etiquetes SURVIT. Un filtre qui devient vide sans le dire est le
+        # meme defaut que le « zero exotique » du §4.8.
+        #
+        # Le candidat est desormais ECARTE, et la raison PERSISTEE : un
+        # fichier de resultats doit dire pourquoi un cas n'a pas ete traite.
         groupes = None if args.tous_groupes else set(r.get('groupes_utiles') or [])
         if groupes is not None and not groupes:
-            groupes = set(r.get('equivariant_possible') or [])
+            L = {'groupe': '-', 'etat': 'aucun groupe d ordre compatible avec '
+                                        'l indice (|chi| != 3.|Gamma|)'}
+            print(f"  {r['cicy']:>5} {r.get('gauge', ''):>7} "
+                  f"{L['groupe']:<11} {L['etat']}")
+            ecartes += 1
+            sortie.append({**{k: r.get(k) for k in
+                              ('cicy', 'gauge', 'rank_V', 'cohomology',
+                               'b_charges', 'c_charges', 'groupes_utiles',
+                               'equivariant_possible', 'ordres_gamma')},
+                           **L, 'survit': False, 'indetermine': True})
+            continue
         lignes = analyser(r['cicy'], amb, cfg, b, c, SYM[num_b]['symetries'],
                           groupes=groupes)
         # Identite du candidat, recopiee sur CHAQUE ligne de sortie.
@@ -328,8 +379,12 @@ def main():
                 sortie.append({**ident, **L, 'survit': False,
                                'indetermine': True})
                 continue
+            L['n_gen_quotient'] = n_gen_quotient(r.get('cohomology'),
+                                                 L['groupe'])
             if L['survit']:
-                verdict = (f"SURVIT (Hoppe complet + surjectif en "
+                ng = L['n_gen_quotient']
+                verdict = (f"SURVIT -- {ng if ng is not None else '?'} gen "
+                           f"sur X/Gamma (Hoppe complet + surjectif en "
                            f"{L['surjectif_degre']})")
             elif L.get('hoppe_complet') is False:
                 verdict = f"tue par Hoppe complet : {L.get('hoppe_valeurs')}"

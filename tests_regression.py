@@ -1720,6 +1720,66 @@ def t_degres_surjectivite():
 
 
 # ======================================================================
+# 11 duodecies. Le verdict doit porter le nombre de generations
+# ======================================================================
+
+@test("n_gen sur X/Gamma : #21 a 12 generations, pas 3 -- le verdict le dit")
+def t_n_gen_quotient():
+    """
+    `equivariance_f.py` limitait les groupes testes a ceux dont l'ordre est
+    compatible avec l'indice... sauf qu'il RETOMBAIT sur tous les groupes
+    quand la liste etait vide, sans le dire :
+
+        groupes = set(r.get('groupes_utiles') or [])
+        if groupes is not None and not groupes:
+            groupes = set(r.get('equivariant_possible') or [])
+
+    Mesure sur le balayage precedent : **3 892 couples sur 4 076, soit
+    95,5 %**, avaient un indice incompatible. Ils ne peuvent donner trois
+    generations avec ce Gamma, quel que soit le verdict -- et certains
+    ressortaient etiquetes `SURVIT`. Un filtre qui devient vide sans le
+    dire est le defaut du §4.8.
+
+    ----------------------------------------------------------------------
+    Le cas reel, avec ses nombres
+    ----------------------------------------------------------------------
+    #21, SU(5) de rang 5, cohomologie [0, 24, 0, 0] donc |chi| = 24. Avec
+    Gamma = Z2, n_gen(X/Gamma) = 24/2 = **12**. Le fibre est stable,
+    equivariant et surjectif -- et n'a rien d'un modele a trois
+    generations. C'est ce que le verdict doit dire.
+
+    Deux verdicts opposes : #21 doit donner 12, #6890 doit donner 3.
+    """
+    from equivariance_f import ordre_nom, n_gen_quotient
+
+    # (a) l'ordre lu sur le nom de Braun
+    for nom, o in (('Z2', 2), ('Z2 x Z2', 4), ('Z3 x Z3', 9), ('Z4', 4),
+                   ('Z8', 8), ('Z4 x Z2$', 8)):
+        assert ordre_nom(nom) == o, (nom, ordre_nom(nom), o)
+
+    # (b) #21 : 24 generations en amont, Z2 -> 12 sur le quotient
+    assert n_gen_quotient([0, 24, 0, 0], 'Z2') == 12, \
+        "#21 doit donner 12 generations, pas 3"
+    assert n_gen_quotient([0, 48, 0, 0], 'Z2') == 24
+    # ... et 3 seulement avec un groupe d'ordre 8
+    assert n_gen_quotient([0, 24, 0, 0], 'Z4 x Z2$') == 3
+
+    # (c) #6890 et #6947 : 6 en amont, Z2 -> 3. C'est le §2.
+    assert n_gen_quotient([0, 6, 0, 0], 'Z2') == 3, \
+        "les deux candidats du §2 doivent donner 3 generations"
+
+    # (d) indice non divisible : on ne fabrique pas un nombre
+    assert n_gen_quotient([0, 6, 0, 0], 'Z4') is None, \
+        "6/4 n'est pas entier : le compte doit etre None, pas arrondi"
+    assert n_gen_quotient(None, 'Z2') is None
+    assert n_gen_quotient([0, 0, 0, 0], 'Z2') is None
+
+    return ("#21 : |chi| = 24 avec Z2 -> 12 generations (3 seulement avec "
+            "un groupe d'ordre 8) ; #6890 : 6 avec Z2 -> 3 ; indice non "
+            "divisible -> None")
+
+
+# ======================================================================
 # 12. Ordre projectif et racines n-iemes
 # ======================================================================
 

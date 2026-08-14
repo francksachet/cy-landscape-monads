@@ -1249,6 +1249,87 @@ Effet sur le scan de contrôle : les scores des E₆ passent de 92,5 à 87,5 —
 10 points de singlets inventés disparaissent, les 25 points d'exotiques restent
 car ils y sont mérités.
 
+
+### 5.20 Situation dans la littérature — les deux candidats sont hors de la classe balayée
+
+Anderson, Gray, He et Lukas ont publié en novembre 2009 (`arXiv:0911.1569`,
+JHEP 02(2010)054) « une analyse complète » de **7 118 monades positives** sur
+les **4 515 CICYs favorables**, ranges 3/4/5, avec les mêmes groupes E₆ / SO(10)
+/ SU(5), et concluent que **toute la classe est écartée sur des bases
+phénoménologiques**. C'est le seul balayage systématique du même terrain. Il
+fallait savoir où `#6890` et `#6947` s'y situent.
+
+**Ils n'y sont pas, et pour une raison de définition.** Leur équation (2.11)
+demande
+
+```
+b_i^r > 0   et   c_a^r > 0   pour TOUT r, i, a
+```
+
+— une positivité **stricte**. Nos deux candidats ont **20 zéros dans B et 2 dans
+C** chacun. Ils sont *semi-positifs*, hors des 7 118. Le générateur du dépôt
+n'impose que leur condition (2.6), c_a ≥ b_i composante par composante, qui est
+beaucoup plus large.
+
+Ce n'est pas une échappatoire technique : les auteurs désignent eux-mêmes cette
+classe comme la frontière intéressante.
+
+> « la condition de positivité, quoique favorable à la stabilité, n'est **pas
+> nécessaire** pour X avec h¹¹(X) > 1. Cela signifie que des monades
+> semi-positives ou même “légèrement négatives” peuvent être stables, et que les
+> monades positives sont vraisemblablement **un petit sous-ensemble** de tous les
+> fibrés monades stables. »
+
+Leur propre nouveau modèle standard est d'ailleurs bâti sur une monade
+**semi-positive**, sur le bicubique.
+
+**Leur couverture en quotients est de cinq variétés.** Le critère χ(V) ∈ 3·S(X)
+appliqué au petit ensemble positif ne laisse que 91 modèles, sur **cinq CICYs
+seulement** : la quintique, [P⁵|3 3], le tétraquadrique [P⁷|2 2 2 2], le
+bicubique, et le tétra-quadrique (P¹)⁴. Le dépôt travaille sur les **194 CICYs**
+de la classification de Braun — publiée en mars 2010, soit **quatre mois après**
+leur article.
+
+**Leurs trois modèles SO(10) ne sont sur aucune de nos CICYs.** Un sur la
+quintique, `0 → V → O(2)³ ⊕ O(1)⁴ → O(4) ⊕ O(3)² → 0`, écarté parce que
+c₂(V) = −45 n'est pas divisible par 25 ; deux sur [P⁵|3 3], exigeant des groupes
+d'ordre 18 et 12 que la variété ne réalise pas.
+
+**Un point de méthode qu'ils laissent explicitement ouvert.** Leur note de bas
+de page 2 dit que la condition (2.6) rend C*⊗B globalement engendré, donc V un
+fibré par un théorème de Fulton–Lazarsfeld — puis :
+
+> « Il est bien possible de relaxer la condition (2.6) et d'obtenir encore un
+> fibré. Mais cela demande une **analyse au cas par cas que nous ne
+> considérerons pas** dans le présent article. »
+
+Or ce théorème porte sur un f **générique**. Le f équivariant est un point
+spécial, et rien ne garantit qu'il évite le lieu où f chute de rang — c'est
+exactement la réserve du §5.4. Le certificat J_d = R_d est cette analyse au cas
+par cas, faite sur le f contraint.
+
+**Ce que cela établit, et ce que cela n'établit pas.** Les deux candidats
+tombent hors du seul balayage systématique de ce terrain, dans la classe que ses
+auteurs désignent comme prometteuse et non traitée, sur des variétés que leur
+couverture n'atteignait pas. Cela **n'établit pas** que personne ne l'a fait
+depuis 2009 : une recherche n'a rien trouvé de systématique — le travail récent
+le plus proche, avec apprentissage par renforcement (2021), ne porte que sur
+**deux variétés** de nombre de Picard 2 et 3 — mais une absence de résultat de
+recherche n'est pas une preuve d'absence.
+
+**Une condition physique que le dépôt ne teste pas.** L'annulation d'anomalie
+exige que c₂(TX) − c₂(V) soit une classe effective, leur équation (2.9). Le
+pipeline ne la vérifie **nulle part**. Contrôle a posteriori sur les deux
+candidats :
+
+| | c₂(TX) − c₂(V) | effectif |
+|---|---|---|
+| **6890** | (10, 18, 22, 18, 28) | oui |
+| **6947** | (22, 18, 10, 18, 36) | oui |
+
+Ils passent — mais par chance, pas par construction. **Les autres candidats du
+catalogue n'ont pas été contrôlés.**
+
 ---
 
 ## 6. Ce qui reste faux ou absent
@@ -1274,6 +1355,7 @@ car ils y sont mérités.
 | exotiques SO(10) et SU(5) | **corrigé (§5.19)** : `None` au lieu d'un zéro structurel, plus de 25 points gratuits. E₆ conserve son compte réel |
 | Higgs E₆ en mode Wilson | **corrigé (§5.19)** : le 3 codé en dur est supprimé. Le compte avec ligne de Wilson demanderait la décomposition des 27 sous Γ, non calculée |
 | h^i hors certification | ~52 % des cas — d_r (r ≥ 2) ou ambiguïté de rang |
+| **annulation d'anomalie** | **jamais testée** (§5.20). c₂(TX) − c₂(V) doit être une classe effective ; les deux candidats la vérifient, contrôlés a posteriori, mais **le reste du catalogue ne l'est pas**. C'est une condition physique, pas un raffinement — un candidat qui la viole n'est pas un modèle |
 | couplages de Yukawa | hors périmètre |
 
 **Point de méthode sur les Higgs sans lignes de Wilson** : un E₆ avec n_anti = 0

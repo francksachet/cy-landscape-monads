@@ -90,9 +90,17 @@ un mécanisme de brisure supplémentaire.
 
 ## 3. Architecture
 
+Le dépôt contient **huit** points d'entrée `main_*.py`. Un seul est maintenu.
+Les sept autres sont antérieurs, n'ont reçu aucune des corrections du §4 ni du
+§5 — **ni l'annulation d'anomalie**, qui est une condition physique — et
+**refusent désormais de tourner** (§5.22). Deux d'entre eux, `main_full_scan` et
+`main_monads`, étaient déjà morts : ils importent `cohomology_end_V_approx`,
+supprimée par la réécriture de `monad_wedge` (§4.3).
+
 ```
 cy_landscape/
 ├── main_optimized.py          scan principal (multiprocessing, checkpoint)
+├── main*.py  (7 autres)       OBSOLÈTES — refusent de tourner (§5.22)
 └── core/
     ├── intersection.py        nombres d'intersection d_ijk, c2(TY)·J
     ├── chi_exact.py           χ par Riemann-Roch — EXACT, sert de préfiltre
@@ -1387,6 +1395,47 @@ la cible d'indice, sans jamais regarder c₂. Toutes les statistiques du documen
 antérieures à cette section décrivent un catalogue dont trois entrées sur cinq
 n'étaient pas des modèles.
 
+
+### 5.22 Où la vérification d'anomalie est-elle réellement en place ?
+
+Question posée après le §5.21, et la réponse était **« à un seul endroit »**.
+
+| | anomalie testée |
+|---|---|
+| `main_optimized.py` (scan) | oui, deux appels — monades et extensions |
+| `tests_regression.py` | oui, 33ᵉ test |
+| **`audit_results.py`** | **non** |
+| `triage_clean.py`, `verify_hoppe.py` | non |
+| les sept autres `main_*.py` | non |
+
+Le trou qui comptait est `audit_results.py`. C'est l'outil dont le rôle est
+précisément de rattraper a posteriori ce qu'un scan a laissé passer — sa
+docstring énumère les tests qu'il applique. Passé sur `scan_wilson2`, il
+annonçait **« 115 retenus, 0 écarté »** alors que 70 de ces entrées ne sont pas
+des modèles. La purge faite au §5.21 était un script jetable, hors du dépôt :
+rien ne permettait de la reproduire.
+
+**Corrigé.** Le drapeau `anomalie` est ajouté, avec le vecteur c₂(TX) − c₂(V)
+dans le champ `anomalie_deficit` — une composante négative identifie la
+direction fautive. Sur `scan_wilson2` :
+
+```
+  monad        anomalie=1
+  pos_monad    anomalie=69
+  Candidats retenus : 45 / 115  (39,1 %)
+```
+
+Exactement le chiffre du §5.21, désormais reproductible d'une commande. Et si
+`cicylist.txt` est absent, le script **le dit** au lieu d'omettre le test en
+silence — un catalogue pourrait sinon ressortir « propre » sans avoir été
+contrôlé.
+
+**Les sept points d'entrée hérités refusent de tourner.** Ils n'ont ni
+l'annulation d'anomalie, ni la phase des twists, ni les correctifs du §4.
+Les laisser exécutables sans le dire offrait un chemin produisant des résultats
+d'apparence normale et faux. Ils sont conservés pour l'historique, avec un refus
+explicite qui renvoie vers `main_optimized`.
+
 ---
 
 ## 6. Ce qui reste faux ou absent
@@ -1412,7 +1461,7 @@ n'étaient pas des modèles.
 | exotiques SO(10) et SU(5) | **corrigé (§5.19)** : `None` au lieu d'un zéro structurel, plus de 25 points gratuits. E₆ conserve son compte réel |
 | Higgs E₆ en mode Wilson | **corrigé (§5.19)** : le 3 codé en dur est supprimé. Le compte avec ligne de Wilson demanderait la décomposition des 27 sous Γ, non calculée |
 | h^i hors certification | ~52 % des cas — d_r (r ≥ 2) ou ambiguïté de rang |
-| annulation d'anomalie | **corrigée (§5.21)** : branchée avec le préfiltre χ, pour les monades comme pour les extensions. Elle écartait **70 des 115** entrées du catalogue. Les deux candidats du §2 passent |
+| annulation d'anomalie | **corrigée (§5.21)** : branchée avec le préfiltre χ, pour les monades comme pour les extensions. Elle écartait **70 des 115** entrées du catalogue. Les deux candidats du §2 passent. Également en place dans `audit_results.py`, donc reproductible sur un catalogue déjà produit (§5.22). **Toujours absente** de `triage_clean.py` et `verify_hoppe.py`, qui travaillent en aval d'un catalogue déjà audité |
 | couplages de Yukawa | hors périmètre |
 
 **Point de méthode sur les Higgs sans lignes de Wilson** : un E₆ avec n_anti = 0

@@ -28,6 +28,22 @@ Tests appliques
     Hoppe et groupe de jauge portent donc sur un autre objet que celui
     annonce.
 
+[anomalie]  c2(TX) - c2(V) n'est pas une classe effective
+    Condition (2.9) de arXiv:0911.1569 : pour preserver la supersymetrie,
+    la classe duale a c2(TX) - c2(V) doit etre effective, ce qui sur une
+    CICY favorable se lit composante par composante. Ce n'est PAS un
+    raffinement -- un fibre qui la viole n'est pas un modele, quelles que
+    soient sa stabilite, sa cohomologie et son nombre de generations.
+
+    Le scan la teste depuis le §5.21, mais les catalogues produits AVANT ne
+    la respectent pas : 70 entrees sur 115 de `scan_wilson2` la violent.
+    Sans ce drapeau, un tel catalogue ressort d'ici « 115 retenus, 0
+    ecarte » -- un filtre absent dont le silence se lit comme une
+    selection (§8, la regle des filtres).
+
+    Le motif affiche porte le vecteur c2(TX) - c2(V) : une composante
+    negative identifie la direction fautive.
+
 [h0_nonzero]  h0(V) != 0
     Pour V stable de pente nulle (c1 = 0), une section globale non nulle
     fournirait un sous-faisceau O de meme pente, ce qui contredit la
@@ -95,9 +111,64 @@ def _indices_attendus(r, n_gen=3):
     return {n_gen}
 
 
-def audit_record(r, seen_keys, n_gen=3):
+def _flag_anomalie(r, geom_cache):
+    """
+    'anomalie' si c2(TX) - c2(V) n'est pas effective, sinon None.
+
+    Renvoie None aussi quand la geometrie n'est pas reconstructible ou que
+    les charges manquent : on ne signale que ce qu'on a verifie. Le cache
+    evite de recalculer les nombres d'intersection par entree.
+    """
+    try:
+        from cy_landscape.core.intersection import (
+            compute_intersection_numbers, compute_c2_tangent,
+            c2_monade, c2_extension, anomalie_effective)
+        from cy_landscape.data.parse_oxford import load_oxford_file
+    except Exception:
+        return None, None
+    num = r.get('cicy')
+    if num is None:
+        return None, None
+    if 'entries' not in geom_cache:
+        chemin = geom_cache.get('cicylist') or 'cicylist.txt'
+        if not os.path.exists(chemin):
+            geom_cache['entries'] = None
+        else:
+            geom_cache['entries'] = {e['num']: e
+                                     for e in load_oxford_file(chemin)}
+    entries = geom_cache['entries']
+    if not entries or num not in entries:
+        return None, None
+    if num not in geom_cache:
+        e = entries[num]
+        d = compute_intersection_numbers(e['ambient'], e['config'])
+        geom_cache[num] = (d, compute_c2_tangent(e['ambient'], e['config'], d))
+    d, c2T = geom_cache[num]
+
+    b = r.get('b_charges') or []
+    c = r.get('c_charges') or []
+    f1 = r.get('f1_charges') or []
+    f2 = r.get('f2_charges') or []
+    if b and c:
+        c2V = c2_monade(d, b, c)
+    elif f1 and f2:
+        c2V = c2_extension(d, f1, f2)
+    else:
+        return None, None
+    ok, deficit = anomalie_effective(c2T, c2V)
+    return (None if ok else 'anomalie'), [round(float(x), 1) for x in deficit]
+
+
+def audit_record(r, seen_keys, n_gen=3, geom_cache=None):
     flags = []
     warns = []
+
+    # ANNULATION D'ANOMALIE -- condition physique, pas un raffinement.
+    if geom_cache is not None:
+        _fa, _def = _flag_anomalie(r, geom_cache)
+        if _fa:
+            flags.append(_fa)
+            r['anomalie_deficit'] = _def
 
     b = r.get('b_charges') or []
     c = r.get('c_charges') or []
@@ -168,12 +239,23 @@ def main():
                          "mode Wilson). Defaut: 3.")
     ap.add_argument('--top', type=int, default=10,
                     help="Nombre de candidats propres a afficher (defaut: 10)")
+    ap.add_argument('--cicylist', default='cicylist.txt',
+                    help="Liste CICY, necessaire pour verifier l'annulation "
+                         "d'anomalie. Absente, le drapeau `anomalie` n'est "
+                         "pas evalue -- et c'est dit explicitement.")
     args = ap.parse_args()
 
     src = os.path.join(args.output_dir, 'results.jsonl')
     if not os.path.exists(src):
         print(f"Introuvable : {src}")
         return 1
+
+    geom_cache = {'cicylist': args.cicylist}
+    if not os.path.exists(args.cicylist):
+        print(f"  ATTENTION : {args.cicylist} introuvable -- le drapeau "
+              f"`anomalie` ne sera PAS evalue.")
+        print(f"  Un catalogue peut donc ressortir « propre » tout en "
+              f"contenant des fibres qui ne sont pas des modeles.")
 
     records = []
     n_lines = n_bad = 0
@@ -217,7 +299,7 @@ def main():
     flag_by_type = defaultdict(Counter)
 
     for r in records:
-        flags, warns = audit_record(r, seen, args.n_gen)
+        flags, warns = audit_record(r, seen, args.n_gen, geom_cache)
         for fl in flags:
             flag_counts[fl] += 1
             flag_by_type[r.get('type')][fl] += 1

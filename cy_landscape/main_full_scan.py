@@ -287,5 +287,39 @@ def main():
         print(f"  Graphiques ignores : {e}")
 
 
+
+# ======================================================================
+# POINT D'ENTREE OBSOLETE  --  refuse de tourner
+# ======================================================================
+#
+# Le seul scan maintenu est `cy_landscape.main_optimized` (§3 du document
+# de reference). Ce fichier-ci est anterieur et n'a recu AUCUNE des
+# corrections du pipeline :
+#
+#   - annulation d'anomalie, c2(TX) - c2(V) effective (§5.21) : absente.
+#     C'est une condition PHYSIQUE. 70 entrees sur 115 du catalogue
+#     `scan_wilson2`, produit sans elle, ne sont pas des modeles ;
+#   - phase des twists du critere de Hoppe (§5.15) : absente. Elle a
+#     demontre un faux positif du catalogue ;
+#   - non-degenerescence des monades (§4.6), c2 croise (§4.1), d_1 de la
+#     suite de Koszul (§4.2), bornes rigoureuses sur H^i (§4.3, §4.4),
+#     phase 0 de Hoppe (§4.5) : selon les fichiers, absentes ou partielles.
+#
+# Le laisser executable sans le dire reviendrait a offrir un chemin qui
+# produit des resultats d'apparence normale et faux -- exactement le motif
+# que le §8 proscrit. Il est conserve pour l'historique, pas pour l'usage.
+
+def _refuser_point_entree_obsolete():
+    import sys
+    print("Ce point d'entree est OBSOLETE et ne doit plus etre utilise.\n"
+          "Il n'a ni l'annulation d'anomalie (condition physique, §5.21),\n"
+          "ni la phase des twists de Hoppe (§5.15), ni plusieurs correctifs\n"
+          "du §4. Utiliser :\n\n"
+          "    python -m cy_landscape.main_optimized cicylist.txt ...\n",
+          file=sys.stderr)
+    sys.exit(2)
+
+
 if __name__ == "__main__":
+    _refuser_point_entree_obsolete()
     main()

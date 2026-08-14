@@ -35,7 +35,8 @@ def process_cicy(args):
      exhaustif_max, ext_exhaustif_max) = args
 
     from cy_landscape.core.intersection import (
-        compute_intersection_numbers, compute_euler_from_intersection, compute_c2_tangent)
+        compute_intersection_numbers, compute_euler_from_intersection,
+        compute_c2_tangent, c2_monade, c2_extension, anomalie_effective)
     from cy_landscape.core.bundles import CICYGeometry, GAUGE_GROUP_TABLE
     from cy_landscape.core.monads import (
         MonadBundle, compute_monad_cohomology, compute_monad_cohomology_ex,
@@ -89,6 +90,8 @@ def process_cicy(args):
     # [monades vues, passant le prefiltre chi, ecartees faute de certification]
     n_prefiltre = [0, 0, 0]
     n_degeneres = [0]
+    # rejets par l'annulation d'anomalie : [monades, extensions]
+    n_anomalie = [0, 0]
     # [extensions vues, passant le prefiltre chi, non eliminees par la
     #  pente, Hoppe-stables]
     n_ext = [0, 0, 0, 0]
@@ -176,6 +179,14 @@ def process_cicy(args):
                     if abs(chi_V) not in cibles_gen:
                         continue
                     n_ext[1] += 1
+
+                    # 1 bis. ANNULATION D'ANOMALIE. c(V) = c(F1)c(F2) sur une
+                    # suite exacte, donc V a la classe de F1 (+) F2.
+                    _ok_a, _ = anomalie_effective(
+                        c2, c2_extension(d, ext.f1_charges, ext.f2_charges))
+                    if not _ok_a:
+                        n_anomalie[1] += 1
+                        continue
 
                     # 2. pente. Arithmetique pure sur les d_ijk, donc placee
                     #    avant toute cohomologie. On n'ecarte que sur
@@ -294,6 +305,20 @@ def process_cicy(args):
                 if chi_V not in cibles_gen:
                     continue
                 n_prefiltre[1] += 1
+
+                # --- ANNULATION D'ANOMALIE ---------------------------------
+                # c2(TX) - c2(V) doit etre une classe EFFECTIVE (condition
+                # (2.9) de arXiv:0911.1569). Ce n'est pas un raffinement :
+                # un fibre qui la viole n'est pas un modele, quelles que
+                # soient sa stabilite et sa cohomologie. Le pipeline ne la
+                # testait nulle part -- 70 entrees sur 115 du catalogue
+                # scan_wilson2 la violent. Arithmetique pure sur les d_ijk,
+                # donc placee avec le prefiltre chi.
+                _ok_a, _def_a = anomalie_effective(
+                    c2, c2_monade(d, monad.b_charges, monad.c_charges))
+                if not _ok_a:
+                    n_anomalie[0] += 1
+                    continue
 
                 if kind != 'extension':
                     map_ok, _ = check_map_exists(monad, c['ambient'], c['config'])
@@ -421,7 +446,7 @@ def process_cicy(args):
 
     return {'cicy': c['num'], 'results': results, 'skipped': None,
             'prefilter': tuple(n_prefiltre), 'degeneres': n_degeneres[0],
-            'extensions': tuple(n_ext)}
+            'extensions': tuple(n_ext), 'anomalie': tuple(n_anomalie)}
 
 
 class ProgressFile:
@@ -827,6 +852,7 @@ def main():
         prefilter_tot = [0, 0, 0]
         degeneres_tot = [0]
         ext_tot = [0, 0, 0, 0]
+        anom_tot = [0, 0]
         pool = None
         try:
             if n_jobs == 1:
@@ -872,6 +898,10 @@ def main():
                     for _i in range(3):
                         prefilter_tot[_i] += pf[_i]
                 degeneres_tot[0] += result.get('degeneres', 0)
+                an = result.get('anomalie')
+                if an:
+                    for _i in range(2):
+                        anom_tot[_i] += an[_i]
                 ex = result.get('extensions')
                 if ex:
                     for _i in range(len(ext_tot)):
@@ -937,6 +967,12 @@ def main():
             print(f"              Rappel : `stable` = non elimine. Hoppe est "
                   f"NECESSAIRE, pas suffisant, des que Pic(X) n'est pas de "
                   f"rang 1.")
+
+        if sum(anom_tot):
+            print(f"\n  Annulation d'anomalie : {anom_tot[0]} monades et "
+                  f"{anom_tot[1]} extensions rejetees")
+            print(f"              c2(TX) - c2(V) non effective -- condition "
+                  f"(2.9) : ce ne sont pas des modeles.")
 
         if skipped:
             print(f"\n  CICYs ecartees pendant cette session "

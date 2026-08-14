@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 32 tests.
+> non une propriété des candidats, et la suite compte 33 tests.
 
 ---
 
@@ -118,7 +118,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        32 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        33 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -1330,6 +1330,63 @@ candidats :
 Ils passent — mais par chance, pas par construction. **Les autres candidats du
 catalogue n'ont pas été contrôlés.**
 
+
+### 5.21 Annulation d'anomalie — 61 % du catalogue n'était pas physique
+
+Le §5.20 a mis au jour une condition que le pipeline ne testait **nulle part** :
+pour préserver la supersymétrie, la classe duale à c₂(TX) − c₂(V) doit être
+**effective**, ce qui sur une CICY favorable se lit composante par composante.
+C'est l'équation (2.9) de `arXiv:0911.1569`, et c'est une contrainte de
+cohérence de la théorie — pas un raffinement. **Un fibré qui la viole n'est pas
+un modèle**, quelles que soient sa stabilité, sa cohomologie et son nombre de
+générations.
+
+**L'ampleur du trou :**
+
+| catalogue `scan_wilson2` | 115 entrées |
+|---|---|
+| **violant l'annulation d'anomalie** | **70 — 60,9 %** |
+| la satisfaisant | 45 |
+
+Les cas les plus nets sont les SU(5) de rang 5 sur `#21` : déficits à
+(−36, 14, −6, 16, 12) ou (−60, −22, 12, 8, 6). Ce sont précisément les entrées
+que le §5.17 avait fait ressortir en `SURVIT` — elles étaient déjà à 12
+générations (§5.18), elles ne sont même pas des théories cohérentes.
+
+**Le calcul.** c(V) = c(B)/c(C) sur une monade, avec c₁(B) = c₁(C) puisque
+c₁(V) = 0, donc c₂(V) = c₂(B) − c₂(C) ; en développant, on retombe exactement
+sur la formule (2.9). Pour une extension, la multiplicativité donne
+c(V) = c(F1)·c(F2), donc V a la classe de F1 ⊕ F2. C'est de l'arithmétique pure
+sur les d_ijk, placée **avec le préfiltre χ**, avant toute cohomologie.
+
+**Le §2 tient.** Les deux candidats passent, avec des déficits confortables :
+
+| | c₂(TX) − c₂(V) |
+|---|---|
+| **6890** | (10, 18, 22, 18, 28) |
+| **6947** | (22, 18, 10, 18, 36) |
+
+Chaîne complète rejouée sur le catalogue assaini — purgé par la phase des twists
+puis par l'anomalie, **114 → 44** :
+
+| | avant | catalogue physique |
+|---|---|---|
+| candidats entrant dans la chaîne | 114 | **44** |
+| passant le test nécessaire sur les charges | 108 | 38 |
+| couples évalués | 184 | 184 |
+| indéterminés | 21 | 21 |
+| **survivants** | **3** | **3** |
+
+Les mêmes : `#6890` (deux entrées) et `#6947`, Γ = ℤ₂, λ = +1, **3 générations**.
+Le résultat principal repose désormais sur un catalogue dont **chaque entrée est
+une théorie cohérente**, ce qui n'était pas le cas.
+
+**Portée du chiffre de 61 %.** Il ne signale pas une erreur de calcul mais une
+condition absente : le générateur produit des monades qui satisfont c₁(V) = 0 et
+la cible d'indice, sans jamais regarder c₂. Toutes les statistiques du document
+antérieures à cette section décrivent un catalogue dont trois entrées sur cinq
+n'étaient pas des modèles.
+
 ---
 
 ## 6. Ce qui reste faux ou absent
@@ -1355,7 +1412,7 @@ catalogue n'ont pas été contrôlés.**
 | exotiques SO(10) et SU(5) | **corrigé (§5.19)** : `None` au lieu d'un zéro structurel, plus de 25 points gratuits. E₆ conserve son compte réel |
 | Higgs E₆ en mode Wilson | **corrigé (§5.19)** : le 3 codé en dur est supprimé. Le compte avec ligne de Wilson demanderait la décomposition des 27 sous Γ, non calculée |
 | h^i hors certification | ~52 % des cas — d_r (r ≥ 2) ou ambiguïté de rang |
-| **annulation d'anomalie** | **jamais testée** (§5.20). c₂(TX) − c₂(V) doit être une classe effective ; les deux candidats la vérifient, contrôlés a posteriori, mais **le reste du catalogue ne l'est pas**. C'est une condition physique, pas un raffinement — un candidat qui la viole n'est pas un modèle |
+| annulation d'anomalie | **corrigée (§5.21)** : branchée avec le préfiltre χ, pour les monades comme pour les extensions. Elle écartait **70 des 115** entrées du catalogue. Les deux candidats du §2 passent |
 | couplages de Yukawa | hors périmètre |
 
 **Point de méthode sur les Higgs sans lignes de Wilson** : un E₆ avec n_anti = 0
@@ -1398,7 +1455,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 32 tests, ~1 min. À lancer après chaque modification,
+**`tests_regression.py` — 33 tests, ~1 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique

@@ -1880,6 +1880,117 @@ def t_quantites_non_calculees():
 
 
 # ======================================================================
+# 11 quaterdecies. Annulation d'anomalie : c2(TX) - c2(V) effective
+# ======================================================================
+
+@test("anomalie : #6890 passe, #21 tombe -- 70 entrees du catalogue sur 115")
+def t_anomalie():
+    """
+    Condition (2.9) de arXiv:0911.1569 : pour preserver la supersymetrie,
+    la classe duale a c2(TX) - c2(V) doit etre EFFECTIVE, ce qui sur une
+    CICY favorable se lit composante par composante.
+
+    **Ce n'est pas un raffinement.** Un fibre qui la viole n'est pas un
+    modele, quelles que soient sa stabilite, sa cohomologie et son nombre
+    de generations. Le pipeline ne la testait NULLE PART, et 70 entrees sur
+    115 du catalogue `scan_wilson2` la violent -- 60,9 %.
+
+    ----------------------------------------------------------------------
+    Quatre references
+    ----------------------------------------------------------------------
+    (a) VALEUR CONNUE D'AVANCE, par un autre chemin. c2(V) est calcule ici
+        par c(V) = c(B)/c(C) -- soit c2(B) - c2(C) -- et confronte a la
+        formule (2.9) de l'article, ecrite independamment :
+
+            c2_r(V) = (1/2) d_rst [ somme_a c_a^s c_a^t - somme_i b_i^s b_i^t ]
+
+    (b) DEUX VERDICTS OPPOSES. `#6890` doit passer, avec le deficit exact
+        (10, 18, 22, 18, 28) ; une entree de `#21` doit tomber, avec sa
+        composante negative.
+
+    (c) EXTENSIONS. c(V) = c(F1)c(F2) sur une suite exacte, donc V a la
+        classe de F1 (+) F2. Verifie sur F2 = F1* : c1(V) = 0 et
+        c2(V) = -c1(F1)^2 / ... -- controle par la formule de somme directe.
+
+    (d) COHERENCE INTERNE. Un fibre trivial (B = C) a c2(V) = 0, donc son
+        deficit vaut exactement c2(TX) : il passe toujours.
+    """
+    import numpy as _np
+    from cy_landscape.core.intersection import (compute_intersection_numbers,
+                                                compute_c2_tangent,
+                                                c2_somme_droites, c2_monade,
+                                                c2_extension,
+                                                anomalie_effective)
+    from cy_landscape.data.parse_oxford import load_oxford_file
+
+    entries = {e['num']: e for e in load_oxford_file('cicylist.txt')}
+
+    # (a) c2(B) - c2(C) contre la formule (2.9), ecrite ici
+    n_rr = 0
+    for num in (6890, 6947, 21):
+        e = entries[num]
+        amb, cfg = e['ambient'], e['config']
+        m = len(amb)
+        d = _np.asarray(compute_intersection_numbers(amb, cfg))
+        for B, C in (([[1] + [0] * (m - 1), [0, 1] + [0] * (m - 2)],
+                      [[1, 1] + [0] * (m - 2)]),
+                     ([[0, 1] + [0] * (m - 2)] * 2,
+                      [[0, 2] + [0] * (m - 2)])):
+            S = _np.zeros((m, m), dtype=_np.int64)
+            for a in C:
+                S += _np.outer(a, a)
+            for x in B:
+                S -= _np.outer(x, x)
+            ref = 0.5 * _np.einsum('rst,st->r', d.astype(float),
+                                   S.astype(float))
+            got = c2_monade(d, B, C)
+            assert _np.allclose(ref, got), (num, list(ref), list(got))
+            n_rr += 1
+    assert n_rr >= 6, n_rr
+
+    # (b) deux verdicts OPPOSES, sur des nombres figes
+    e = entries[6890]
+    d = compute_intersection_numbers(e['ambient'], e['config'])
+    c2T = compute_c2_tangent(e['ambient'], e['config'], d)
+    B6890 = [[0, 1, 0, 0, 0], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0],
+             [0, 0, 1, 0, 0], [0, 0, 0, 1, 0]]
+    ok, deficit = anomalie_effective(c2T, c2_monade(d, B6890, [[0, 1, 3, 1, 0]]))
+    assert ok, (deficit, "#6890 doit satisfaire l'annulation d'anomalie")
+    assert [round(x) for x in deficit] == [10, 18, 22, 18, 28], deficit
+
+    e21 = entries[21]
+    d21 = compute_intersection_numbers(e21['ambient'], e21['config'])
+    c2T21 = compute_c2_tangent(e21['ambient'], e21['config'], d21)
+    # entree reelle du catalogue scan_wilson2, rang 3 E6
+    B21 = [[0, 0, 2, 1, 0], [0, 0, 0, 0, 1], [0, 0, 0, 1, 0],
+           [0, 0, 1, 1, 0], [0, 0, 1, 0, 0], [0, 0, 0, 0, 1]]
+    C21 = [[0, 0, 4, 3, 2]]
+    ok21, def21 = anomalie_effective(c2T21, c2_monade(d21, B21, C21))
+    assert ok21 is False, (def21, "cette entree de #21 doit tomber : sans "
+                                  "verdict oppose, un filtre qui accepte "
+                                  "tout passerait")
+    assert any(x < 0 for x in def21), def21
+
+    # (c) extensions : c(V) = c(F1) c(F2)
+    m = len(e['ambient'])
+    f1 = [[1] + [0] * (m - 1), [0, 1] + [0] * (m - 2)]
+    f2 = [[-x for x in v] for v in f1]
+    assert _np.allclose(c2_extension(d, f1, f2),
+                        c2_somme_droites(d, f1 + f2)), "c(V) != c(F1)c(F2)"
+
+    # (d) coherence : B = C donne c2(V) = 0, donc deficit = c2(TX)
+    triv = [[1] + [0] * (m - 1)]
+    assert _np.allclose(c2_monade(d, triv, triv), 0.0), \
+        "B = C doit donner c2(V) = 0"
+    _, dt = anomalie_effective(c2T, c2_monade(d, triv, triv))
+    assert [round(x) for x in dt] == [round(float(x)) for x in c2T], (dt, c2T)
+
+    return (f"{n_rr} c2(V) == formule (2.9) ; #6890 passe avec deficit "
+            f"{[round(x) for x in deficit]}, l'entree de #21 tombe avec "
+            f"{[round(x) for x in def21]} ; c(V) = c(F1)c(F2) verifie")
+
+
+# ======================================================================
 # 12. Ordre projectif et racines n-iemes
 # ======================================================================
 

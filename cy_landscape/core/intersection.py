@@ -388,3 +388,78 @@ def compute_hodge_favorable(
     chi = compute_euler_from_intersection(ambient_dims, config_matrix, d_ijk)
     h21 = h11 - chi // 2
     return h11, h21
+
+
+# ======================================================================
+# ANNULATION D'ANOMALIE  --  condition (2.9) de arXiv:0911.1569
+# ======================================================================
+#
+# Pour preserver la supersymetrie sans brane exotique, la classe duale a
+# c2(TX) - c2(V) doit etre EFFECTIVE. Sur une CICY favorable, cela se lit
+# composante par composante :
+#
+#     c2_r(V) <= c2_r(TX)   pour tout r
+#
+# Ce n'est pas un raffinement : c'est une condition de coherence de la
+# theorie. Un fibre qui la viole n'est pas un modele, quelles que soient sa
+# stabilite et sa cohomologie.
+#
+# Le pipeline ne la testait NULLE PART. Mesure sur le catalogue
+# `scan_wilson2` : 70 entrees sur 115, soit 60,9 %, la violent. Les deux
+# candidats du §2 la satisfont -- mais par chance, pas par construction.
+
+
+def c2_somme_droites(d_ijk, charges):
+    """
+    c2 de (+) O(x_i), en composantes sur la base duale des J_r.
+
+    c2( (+) O(x_i) ) = somme_{i<j} x_i . x_j, et
+
+        somme_{i<j} x_i^s x_j^t = (1/2) [ (somme_i x_i^s)(somme_i x_i^t)
+                                          - somme_i x_i^s x_i^t ]
+
+    d'ou c2_r = (1/2) d_rst [ ... ]. Renvoie un vecteur de flottants : les
+    c2 peuvent etre demi-entiers avant contraction, comme dans `c2_tangent`.
+    """
+    d = np.asarray(d_ijk, dtype=np.int64)
+    m = d.shape[0]
+    X = np.asarray(charges, dtype=np.int64).reshape(-1, m)
+    tot = X.sum(axis=0)
+    S = np.outer(tot, tot) - (X[:, :, None] * X[:, None, :]).sum(axis=0)
+    return 0.5 * np.einsum('rst,st->r', d.astype(float), S.astype(float))
+
+
+def c2_monade(d_ijk, b_charges, c_charges):
+    """
+    c2(V) pour 0 -> V -> B -> C -> 0.
+
+    c(V) = c(B)/c(C) et c1(B) = c1(C) puisque c1(V) = 0, d'ou
+    c2(V) = c2(B) - c2(C). En developpant, on retombe exactement sur la
+    formule (2.9) de arXiv:0911.1569 :
+
+        c2_r(V) = (1/2) d_rst [ somme_a c_a^s c_a^t - somme_i b_i^s b_i^t ]
+    """
+    return (c2_somme_droites(d_ijk, b_charges)
+            - c2_somme_droites(d_ijk, c_charges))
+
+
+def c2_extension(d_ijk, f1_charges, f2_charges):
+    """
+    c2(V) pour 0 -> F1 -> V -> F2 -> 0.
+
+    La classe de Chern totale est multiplicative sur une suite exacte :
+    c(V) = c(F1) c(F2), donc V a la meme classe que F1 (+) F2.
+    """
+    return c2_somme_droites(d_ijk, list(f1_charges) + list(f2_charges))
+
+
+def anomalie_effective(c2_tangent, c2_V, tol=1e-9):
+    """
+    (ok, deficit) : c2(TX) - c2(V) est-elle effective ?
+
+    `deficit` est le vecteur c2(TX) - c2(V) ; une composante negative
+    identifie la direction fautive, ce qui vaut mieux qu'un booleen seul
+    pour comprendre un rejet.
+    """
+    diff = [float(t) - float(v) for t, v in zip(c2_tangent, c2_V)]
+    return all(x >= -tol for x in diff), diff

@@ -2237,11 +2237,10 @@ def t_checkpoint_equivariance_f():
     lignes = toutes[:14]
     assert len(lignes) >= 12, "extrait trop court pour couper au milieu"
 
-    def lance(dossier, secondes=None):
+    def lance(dossier, extra=()):
         cmd = [sys.executable, '-u', os.path.join(base, 'equivariance_f.py'),
-               quo, lst, dossier]
-        return subprocess.run(cmd, capture_output=True, text=True,
-                              timeout=secondes, cwd=base)
+               quo, lst, dossier, *extra]
+        return subprocess.run(cmd, capture_output=True, text=True, cwd=base)
 
     def contenu(dossier):
         p = os.path.join(dossier, 'results_equivariance_f.jsonl')
@@ -2265,35 +2264,36 @@ def t_checkpoint_equivariance_f():
         # 3,6 s de ce budget partent en demarrage (lecture des 7 890 CICYs
         # et des symetries de Braun) : une tranche plus courte ne couperait
         # jamais en plein calcul, et le test ne prouverait rien.
+        # Les coupures sont PROVOQUEES (--arret-apres), pas chronometrees.
+        # Un premier jet coupait par timeout : selon la charge de la machine
+        # le lot passait parfois d'un trait, et le test echouait sans qu'il
+        # y ait de defaut -- ou pire, passait sans rien exercer.
         coupures = 0
         injecte = False
         dstB = os.path.join(B, 'results_equivariance_f.jsonl')
         for _ in range(6):
-            try:
-                lance(B, secondes=7)
+            sortie_c = lance(B, extra=('--arret-apres', '4')).stdout
+            if 'INTERROMPU' not in sortie_c:
                 break                      # alle au bout
-            except subprocess.TimeoutExpired:
-                coupures += 1              # coupe en plein calcul
-                if not injecte:
-                    # COUPURE EN PLEIN MILIEU D'UN CANDIDAT, simulee.
-                    # Attendre que le hasard du timing la produise rendrait
-                    # ce volet non deterministe : la coupure tombe le plus
-                    # souvent ENTRE deux candidats, ou il n'y a rien a
-                    # tronquer -- et le test passait alors meme avec la
-                    # troncature retiree. On ecrit donc explicitement des
-                    # lignes au-dela de l'offset valide, comme l'aurait fait
-                    # un candidat interrompu apres un vidage partiel.
-                    with open(dstB, 'a', encoding='utf-8') as f:
-                        f.write('{"__poubelle__": 1}\n{"__poubelle__": 2}\n')
-                    injecte = True
+            coupures += 1
+            if not injecte:
+                # LIGNES ECRITES AU-DELA DE L'OFFSET VALIDE, comme les
+                # aurait laissees un candidat mort apres un vidage partiel.
+                # Le premier jet attendait que le hasard du chronometre
+                # produise ce cas : il tombe presque toujours ENTRE deux
+                # candidats, ou il n'y a rien a tronquer, et le test passait
+                # alors meme avec la troncature retiree.
+                with open(dstB, 'a', encoding='utf-8') as f:
+                    f.write('{"__poubelle__": 1}\n{"__poubelle__": 2}\n')
+                injecte = True
         else:
             lance(B)
         assert coupures <= 4, \
             ("le lot n'avance pas entre deux coupures : la reprise repart "
              "peut-etre de zero a chaque fois")
-        assert coupures >= 1 and injecte, \
-            ("le lot s'est termine sans jamais etre coupe : ni la reprise "
-             "ni la troncature ne sont exercees. Allonger l'extrait.")
+        assert coupures >= 2 and injecte, \
+            ("le lot s'est termine sans coupure : ni la reprise ni la "
+             "troncature ne sont exercees.")
         assert not any('__poubelle__' in l for l in
                        open(dstB, encoding='utf-8')), \
             ("les lignes ecrites au-dela de l'offset valide ont survecu : "
@@ -2361,6 +2361,188 @@ def t_checkpoint_equivariance_f():
 
     return (f"{len(ref)} lignes identiques apres {coupures} coupure(s) ; "
             f"2 gardes qui refusent, 1 reprise acceptee")
+
+
+# ======================================================================
+# Repli par orbite sous Aut(matrice de configuration)
+# ======================================================================
+
+@test("repli par orbite : memes verdicts, aucune ligne perdue, controle qui mord")
+def t_repli_orbites():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    Le repli n'evalue qu'un representant par orbite et RECOPIE son verdict
+    sur les autres membres. Si l'hypothese est fausse, il invente des
+    resultats -- et sans garde-fou, en silence. C'est le mecanisme meme du
+    §5.23, applique cette fois volontairement : raison de plus pour le
+    tenir serre.
+
+    Quatre volets :
+
+      (a) Aut(config) est un vrai groupe : identite presente, stable par
+          composition et par inverse. Une « symetrie » qui n'en est pas
+          une donnerait des orbites arbitraires.
+      (b) Les verdicts sont INVARIANTS sur les orbites -- verifie non pas
+          en principe mais sur les sorties reelles de #6890, #6947, #6715.
+      (c) AUCUNE LIGNE NE DISPARAIT : le JSONL replie a exactement les
+          memes candidats et les memes verdicts que le JSONL complet.
+      (d) LE CONTROLE MORD. Un repli abusif -- toutes les monades dans une
+          seule orbite -- doit produire des discordances. Sans ce volet,
+          le controle pourrait etre un ornement.
+    """
+    import json
+    from cy_landscape.core.symetrie_config import (automorphismes, canonique,
+                                                   verifier_invariance)
+    from cy_landscape.data.parse_oxford import load_oxford_file
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    lst = os.path.join(base, 'cicylist.txt')
+    if not os.path.exists(lst):
+        return "ignore : cicylist.txt absent"
+    E = {e['num']: e for e in load_oxford_file(lst)}
+
+    # --- (a) Aut(config) est bien un groupe --------------------------
+    n_verif = 0
+    ordres = {}
+    for num in (5, 15, 22, 95, 6715, 6890, 6947, 7300):
+        if num not in E:
+            continue
+        e = E[num]
+        autos, complet = automorphismes(e['ambient'], e['config'])
+        assert complet, (num, "enumeration abandonnee")
+        m = len(e['ambient'])
+        ident = tuple(range(m))
+        assert ident in autos, (num, "identite absente")
+        S = set(autos)
+        for p in autos:
+            inv = tuple(sorted(range(m), key=lambda i: p[i]))
+            assert inv in S, (num, "non stable par inverse", p)
+            for q in autos:
+                assert tuple(p[q[i]] for i in range(m)) in S, \
+                    (num, "non stable par composition", p, q)
+        ordres[num] = len(autos)
+        n_verif += 1
+    assert n_verif >= 5, n_verif
+    # Le groupe doit etre NON TRIVIAL quelque part et TRIVIAL ailleurs :
+    # sinon le test ne distinguerait pas un vrai calcul d'une constante.
+    assert max(ordres.values()) > 1 and min(ordres.values()) == 1, ordres
+    assert ordres.get(6947) == 24 and ordres.get(6890) == 1, ordres
+
+    # --- (b) invariance mesuree sur des sorties reelles --------------
+    rapports = {}
+    for num in (6890, 6947, 6715):
+        p = os.path.join(base, f'scan_w4_c{num}', 'results_equivariance_f.jsonl')
+        if not os.path.exists(p):
+            continue
+        L = [json.loads(l) for l in open(p, encoding='utf-8') if l.strip()]
+        L = [x for x in L if x.get('b_charges')]
+        if not L:
+            continue
+        rap = verifier_invariance(L, E[num]['ambient'], E[num]['config'])
+        rapports[num] = rap
+        assert rap['discordantes'] == 0, \
+            (f"#{num} : {rap['discordantes']} orbites dont les membres "
+             f"n'ont pas le meme verdict -- le repli inventerait des "
+             f"resultats", rap['exemples_discordants'])
+    if rapports:
+        # Au moins une CICY doit avoir des orbites NON TRIVIALES, sinon
+        # « 0 discordance » serait vrai sans rien comparer.
+        assert any(r['orbites_non_triviales'] > 0 for r in rapports.values()), \
+            ("aucune orbite non triviale : l'invariance n'est pas testee",
+             rapports)
+
+    # --- (c) et (d) : sur un lot reel, si disponible ------------------
+    detail_cd = "sans lot (scan_w4_c6947 absent)"
+    srcs = [os.path.join(base, d, 'results_equivariant.jsonl')
+            for d in ('scan_w4_c6947', 'scan_wilson4')]
+    src = next((s for s in srcs if os.path.exists(s)), None)
+    if src and os.path.exists(os.path.join(base, 'cicyquotients.m')):
+        import subprocess, tempfile, shutil
+        lignes = [l for l in open(src, encoding='utf-8')
+                  if l.strip() and json.loads(l).get('cicy') == 6947][:40]
+        if len(lignes) >= 8:
+            tmp = tempfile.mkdtemp(prefix='orbtest_')
+            try:
+                def prepare(nom):
+                    d = os.path.join(tmp, nom)
+                    os.makedirs(d)
+                    with open(os.path.join(d, 'results_equivariant.jsonl'),
+                              'w', encoding='utf-8') as f:
+                        f.writelines(lignes)
+                    return d
+
+                def lance(d, *extra):
+                    return subprocess.run(
+                        [sys.executable, '-u',
+                         os.path.join(base, 'equivariance_f.py'),
+                         os.path.join(base, 'cicyquotients.m'), lst, d,
+                         *extra], capture_output=True, text=True, cwd=base)
+
+                def verdicts(d):
+                    out = {}
+                    p = os.path.join(d, 'results_equivariance_f.jsonl')
+                    for l in open(p, encoding='utf-8'):
+                        x = json.loads(l)
+                        k = (tuple(sorted(map(tuple, x.get('b_charges') or []))),
+                             tuple(sorted(map(tuple, x.get('c_charges') or []))))
+                        out.setdefault(k, set()).add(
+                            (str(x.get('groupe')), str(x.get('lambda')),
+                             bool(x.get('survit')), str(x.get('etat'))))
+                    return out
+
+                plein, replie = prepare('plein'), prepare('replie')
+                lance(plein)
+                sortie = lance(replie, '--replier-orbites').stdout
+                vp, vr = verdicts(plein), verdicts(replie)
+                assert set(vp) == set(vr), \
+                    (f"le repli a perdu ou invente des candidats : "
+                     f"{len(vp)} contre {len(vr)}")
+                diff = [k for k in vp if vp[k] != vr[k]]
+                assert not diff, \
+                    (f"{len(diff)} candidats ont un verdict different apres "
+                     f"repli", diff[:1])
+                assert 'Repli par orbite' in sortie and \
+                       '0 discordance' in sortie, sortie[-600:]
+                # Le repli doit AVOIR REPLIE : un repli qui ne replie rien
+                # passerait (c) sans rien demontrer.
+                n_rep = sum(1 for l in open(
+                    os.path.join(replie, 'results_equivariance_f.jsonl'),
+                    encoding='utf-8') if json.loads(l).get('verdict_replique'))
+                assert n_rep > 0, "aucune ligne repliee : le repli est inactif"
+
+                # (d) repli ABUSIF : le controle doit crier.
+                mod = os.path.join(base, 'cy_landscape', 'core',
+                                   'symetrie_config.py')
+                original = open(mod, encoding='utf-8').read()
+                sabote = original.replace(
+                    "    meilleur = None\n    for p in autos:",
+                    "    return ('TOUT_PAREIL',)\n"
+                    "    meilleur = None\n    for p in autos:")
+                assert sabote != original, "sabotage non applique"
+                abusif = prepare('abusif')
+                try:
+                    with open(mod, 'w', encoding='utf-8') as f:
+                        f.write(sabote)
+                    s2 = lance(abusif, '--replier-orbites',
+                               '--controle-orbites', '8').stdout
+                finally:
+                    with open(mod, 'w', encoding='utf-8') as f:
+                        f.write(original)
+                assert 'DISCORDANCE' in s2, \
+                    ("un repli qui range TOUS les candidats dans une seule "
+                     "orbite n'a declenche aucune discordance : le controle "
+                     "ne protege de rien\n" + s2[-700:])
+                detail_cd = (f"{len(vp)} candidats, {n_rep} lignes repliees, "
+                             f"repli abusif detecte")
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+
+    res = ", ".join(f"#{k}:|Aut|={v}" for k, v in sorted(ordres.items()))
+    inv = ("; ".join(f"#{k} {v['orbites_non_triviales']} orbites non triviales, "
+                     f"0 discordance" for k, v in sorted(rapports.items()))
+           or "pas de sortie reelle disponible")
+    return f"{res} | {inv} | {detail_cd}"
 
 
 # ======================================================================

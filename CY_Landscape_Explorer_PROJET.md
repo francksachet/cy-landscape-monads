@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 35 tests.
+> non une propriété des candidats, et la suite compte 36 tests.
 
 ---
 
@@ -134,7 +134,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        35 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        36 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -1599,6 +1599,68 @@ pas entre deux coupures »), et ouverture du JSONL en `'w'` au lieu de `'a'`.
 
 ---
 
+### 5.25 Replier les orbites : facteur 4, et le contrôle qui empêche que ce soit un §5.23 de plus
+
+Le générateur énuméré produit la famille **complète** des sommes de vecteurs
+unité. Sur une CICY dont la matrice de configuration est symétrique, cette
+famille contient les images les unes des autres. Les **12 monades survivantes de
+#6947** sont les 12 arrangements d'un même motif de multiplicités (3, 1, 1, 0)
+sur ses quatre facteurs P¹ — et son groupe d'automorphismes est d'ordre **24**,
+de sorte que ces 12 forment **une seule orbite**. Douze fois le même calcul.
+
+`Aut(config)` = les permutations des facteurs projectifs qui préservent les
+dimensions et redonnent le même **multiensemble** de lignes — les équations ne
+sont pas numérotées.
+
+| CICY | \|Aut\| | ce que cela change |
+|---|---|---|
+| 7300 | 72 | 762 candidats → 24 orbites |
+| 5302 | 48 | 564 → 20 |
+| **6947** | **24** | 176 → 12 |
+| 5 | 12 | 334 → ~28 |
+| 6715 | 6 | 158 → 32 |
+| **6890** | **1** | **aucun repli possible** |
+
+Sur les 194 CICYs : **14 945 candidats → 3 688 orbites, facteur 4,05.** Soit
+environ **14 h au lieu de 55**. Mesuré de bout en bout sur #6947 : 62,8 s sans
+repli, 13,3 s avec (contrôle compris), **verdicts identiques sur les 176
+candidats**, mêmes 12 survivants.
+
+**Ce qui n'est PAS démontré.** Qu'une permutation préserve la matrice de
+configuration n'implique **pas** qu'elle commute avec l'action de Γ lue chez
+Braun, laquelle est attachée à des coordonnées précises. L'égalité des verdicts
+sur une orbite est une **hypothèse**, vérifiée sur 919 lignes réelles (#6890,
+#6947, #6715 : 0 discordance sur 42 orbites non triviales) et non prouvée.
+
+C'est exactement la situation du §5.23 — un filtre qui peut faire disparaître des
+candidats — sauf qu'ici on la choisit. D'où trois précautions :
+
+1. **Le repli est optionnel.** Par défaut chaque candidat est évalué.
+2. **Aucune ligne ne disparaît.** Le verdict du représentant est recopié sur
+   chaque membre avec `verdict_replique: True` et l'identité du représentant. Le
+   JSONL compte autant de lignes qu'un balayage complet ; l'aval ne voit aucune
+   différence, sinon un champ qui dit d'où vient le verdict.
+3. **Le repli se contrôle lui-même.** `--controle-orbites N` (défaut 20) évalue
+   **pour de vrai** N membres non représentants et compare. Une discordance est
+   affichée, comptée, et le run déclare le repli invalide.
+
+**Le point qui a failli tout vider de sens.** Le contrôle tirait d'abord *N
+orbites*, un membre chacune. J'ai saboté `canonique` pour qu'elle range **tous**
+les candidats d'une CICY dans une seule orbite — un repli entièrement faux. Le
+run a affiché : *176 candidats → 1 tâche, 1 contrôle, 0 discordance.* Le contrôle
+validait le sabotage, parce qu'une orbite unique ne reçoit qu'un tirage. Il tire
+maintenant **N couples (orbite, membre)** : une orbite géante reçoit une part des
+contrôles proportionnelle à sa taille, et le sabotage produit six discordances.
+
+**Le test (36ᵉ)** vérifie que `Aut(config)` est un groupe (identité, stabilité par
+composition et inverse, sur 8 CICYs, avec des ordres allant de 1 à 72 — un ordre
+constant trahirait une constante déguisée), que les verdicts sont invariants sur
+les orbites des sorties réelles, que le JSONL replié a exactement les mêmes
+candidats et verdicts que le complet, et que le repli abusif **déclenche** les
+discordances.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -1665,7 +1727,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 35 tests, ~3 min. À lancer après chaque modification,
+**`tests_regression.py` — 36 tests, ~4 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -1733,6 +1795,7 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | §5.13 | recherche de témoin J sur une grille trop petite | « 24 % des fibrés sont déstabilisés » |
 | §5.17 | marge exactement nulle, falsy en Python | les degrés certifiants des deux candidats, écartés |
 | §5.18 | `groupes_utiles` vide ⇒ repli sur **tous** les groupes | 95,5 % des couples calculés hors cible, certains marqués `SURVIT` |
+| §5.25 | contrôle du repli tiré **par orbite** : une orbite géante n'en recevait qu'un | un repli entièrement faux validé par « 0 discordance » |
 | **§5.23** | **le générateur lui-même : 10 tirages sur une famille de 2 201** | **« ces fibrés n'existent pas sur ces CICYs »** — alors qu'ils n'avaient pas été engendrés |
 
 La septième est la plus coûteuse : c'est un filtre qu'on n'avait pas identifié
@@ -1759,7 +1822,7 @@ D'où trois exigences, tenues par les tests :
 
 Et le contrôle qui met tout cela à l'épreuve : **casser le filtre dans les deux
 sens.** Un module qui accepte tout et un module qui rejette tout doivent chacun
-faire tomber un volet différent du test. Sur les treize tests ajoutés depuis, six
+faire tomber un volet différent du test. Sur les quatorze tests ajoutés depuis, sept
 cassages « évidents » se sont révélés **passants** au premier essai — c'est en
 les voyant passer qu'on a trouvé le vrai angle mort.
 
@@ -1781,6 +1844,12 @@ python validate_cohomology.py cicylist.txt --n-cicys 60 --max-charge 4
 mkdir scan_w4_c6890 ; copy scan_wilson4\results_equivariant.jsonl scan_w4_c6890\
 python -u equivariance_f.py cicyquotients.m cicylist.txt scan_w4_c6890 --cicy 6890
 python resume_cible.py scan_w4_c6890 scan_w4_c6947 scan_w4_c6715
+
+# balayage complet avec repli par orbite (§5.25) : ~14 h au lieu de ~55.
+#   Aucune ligne ne disparait ; --controle-orbites verifie le repli en cours
+#   de route et declare le run invalide s'il trouve une discordance.
+python -u equivariance_f.py cicyquotients.m cicylist.txt scan_wilson4 `
+       --replier-orbites | Tee-Object -FilePath scan_wilson4_equiv_f.log
 
 # reprise d'un balayage interrompu (§5.24) : relancer LA MEME commande.
 #   Le checkpoint est dans <dossier>/progress_equivariance_f.json.

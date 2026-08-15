@@ -345,6 +345,126 @@ class Progression:
         os.replace(tmp, self.chemin)   # remplacement atomique
 
 
+# ======================================================================
+# Repli par orbite sous Aut(matrice de configuration)
+# ======================================================================
+#
+# Le generateur enumere (§5.23) produit la famille COMPLETE des sommes de
+# vecteurs unite. Sur une CICY dont la matrice de configuration est
+# symetrique, cette famille contient les images les unes des autres : les
+# 12 monades survivantes de #6947 sont les 12 arrangements d'un meme motif
+# (3, 1, 1, 0) sur ses quatre facteurs P^1, et |Aut| y vaut 24.
+#
+# Mesure sur les 14 945 candidats de scan_wilson4 : 3 688 orbites, soit un
+# facteur 4,05 -- environ 14 h au lieu de 55.
+#
+# CE QUI EST DEMONTRE, ET CE QUI NE L'EST PAS
+# -------------------------------------------
+# Qu'une permutation preserve la matrice de configuration n'implique PAS
+# qu'elle commute avec l'action de Gamma lue chez Braun, laquelle est
+# attachee a des coordonnees precises. L'egalite des verdicts sur une
+# orbite est donc une hypothese, verifiee empiriquement (0 discordance sur
+# les 919 lignes de #6890, #6947 et #6715) mais non prouvee.
+#
+# D'ou deux precautions, sans lesquelles ce repli serait une redite exacte
+# du §5.23 -- un filtre qui fait disparaitre des candidats en silence :
+#
+#   1. AUCUNE LIGNE NE DISPARAIT. Le verdict du representant est recopie
+#      sur chaque membre, avec `verdict_replique: True`. Le JSONL de sortie
+#      compte autant de lignes qu'un balayage complet, et l'aval ne voit
+#      aucune difference -- sinon un champ qui dit d'ou vient le verdict.
+#   2. LE REPLI SE CONTROLE LUI-MEME. `--controle-orbites N` evalue POUR DE
+#      VRAI N membres non representants et compare. Une discordance est
+#      affichee, comptee, et inscrite dans le JSONL.
+#
+# Le repli reste optionnel : par defaut, chaque candidat est evalue.
+
+def _construire_taches(rs, entries, args):
+    """
+    Rend (taches, rapport). Une tache = (i_representant, [i_membres]).
+
+    Sans `--replier-orbites`, une tache par candidat : la boucle
+    principale ne connait que les taches et ne change pas de forme.
+    """
+    if not getattr(args, 'replier_orbites', False):
+        return [(i, [i]) for i in range(len(rs))], None
+
+    from cy_landscape.core.symetrie_config import automorphismes, canonique
+
+    par_cicy = {}
+    for i, r in enumerate(rs):
+        par_cicy.setdefault(r['cicy'], []).append(i)
+
+    taches = []
+    n_aut_trivial = 0
+    cache = {}
+    for cicy, idx in par_cicy.items():
+        e = entries.get(cicy)
+        if e is None:
+            taches.extend((i, [i]) for i in idx)
+            continue
+        if cicy not in cache:
+            cache[cicy] = automorphismes(e['ambient'], e['config'])
+        autos, complet = cache[cicy]
+        if len(autos) <= 1:
+            n_aut_trivial += 1
+            taches.extend((i, [i]) for i in idx)
+            continue
+        classes = {}
+        for i in idx:
+            r = rs[i]
+            if not r.get('b_charges'):
+                classes[('_sans_charges_', i)] = [i]
+                continue
+            classes.setdefault(
+                canonique(r['b_charges'], r['c_charges'], autos), []).append(i)
+        for membres in classes.values():
+            taches.append((membres[0], membres))
+
+    rapport = {
+        'candidats': len(rs),
+        'taches': len(taches),
+        'cicys_sans_symetrie': n_aut_trivial,
+        'facteur': len(rs) / max(1, len(taches)),
+    }
+    return taches, rapport
+
+
+def _echantillon_controle(taches, n, graine=0):
+    """
+    Rend {indice de tache: [membres a reevaluer pour de vrai]}.
+
+    On tire N COUPLES (orbite, membre), pas N orbites. La difference n'est
+    pas cosmetique : avec un tirage par orbite, un repli abusif qui range
+    TOUS les candidats d'une CICY dans une seule orbite ne recevait qu'UN
+    controle -- et passait. Constate en sabotant `canonique` pour qu'elle
+    renvoie une constante : 176 candidats replies en 1 tache, 1 controle,
+    0 discordance. Le controle validait un repli entierement faux.
+
+    En tirant des couples, une orbite geante recoit une part des controles
+    proportionnelle a sa taille, et le sabotage tombe.
+
+    Les orbites a un seul membre sont exclues : les controler ne
+    comparerait rien -- le genre de controle qui passe toujours (§8).
+    """
+    if n <= 0:
+        return {}
+    couples = [(k, j) for k, (i_rep, membres) in enumerate(taches)
+               for j in membres if j != i_rep]
+    if not couples:
+        return {}
+    rng = np.random.RandomState(graine)
+    if len(couples) > n:
+        pris = [couples[t] for t in
+                rng.choice(len(couples), size=n, replace=False)]
+    else:
+        pris = couples
+    sortie = {}
+    for k, j in pris:
+        sortie.setdefault(k, []).append(j)
+    return sortie
+
+
 def _sortie_tolerante():
     """
     Empeche un plantage d'encodage sur une console Windows.
@@ -377,6 +497,26 @@ def main():
                          "avec l'indice (champ groupes_utiles).")
     ap.add_argument('--reset', action='store_true',
                     help="Ignorer le checkpoint et repartir de zero.")
+    ap.add_argument('--arret-apres', type=int, default=0,
+                    help="S'arreter proprement apres N taches, comme le "
+                         "ferait une interruption. Sert aux tests : une "
+                         "coupure provoquee par un chronometre tombe presque "
+                         "toujours ENTRE deux candidats, et la reprise n'est "
+                         "alors pas reellement mise a l'epreuve. 0 = inactif.")
+    ap.add_argument('--replier-orbites', action='store_true',
+                    help="N'evaluer qu'un representant par orbite sous le "
+                         "groupe d'automorphismes de la matrice de "
+                         "configuration, et recopier son verdict sur les "
+                         "autres membres (champ verdict_replique). Mesure "
+                         "sur les 14 945 candidats de scan_wilson4 : 3 688 "
+                         "orbites, soit un facteur 4,05. Les lignes de "
+                         "sortie restent AU COMPLET.")
+    ap.add_argument('--controle-orbites', type=int, default=20,
+                    help="Avec --replier-orbites : evaluer pour de vrai N "
+                         "membres non representants, et comparer au verdict "
+                         "recopie. Sans ce controle le repli serait une "
+                         "hypothese invisible -- exactement le mecanisme du "
+                         "§5.23. 0 = desactiver.")
     args = ap.parse_args()
 
     entries = {e['num']: e for e in load_oxford_file(args.cicylist)}
@@ -391,9 +531,17 @@ def main():
     if args.cicy:
         rs = [r for r in rs if r['cicy'] == args.cicy]
 
+    # ---------------- repli par orbite (optionnel) -------------------
+    # Une TACHE = (indice du representant, indices de tous les membres).
+    # Sans repli, une tache par candidat : la boucle et le checkpoint ne
+    # connaissent que les taches, et rien d'autre ne change.
+    taches, rapport_orbites = _construire_taches(rs, entries, args)
+
     # ---------------- checkpoint ------------------------------------
     dst = os.path.join(args.output_dir, 'results_equivariance_f.jsonl')
-    prog = Progression(args.output_dir, _empreinte(src, args.cicy))
+    prog = Progression(args.output_dir,
+                       _empreinte(src, (args.cicy, bool(args.replier_orbites),
+                                        int(args.controle_orbites))))
     depart = 0
     survivants = indetermines = ecartes = 0
 
@@ -413,8 +561,8 @@ def main():
             # Tronque ce qu'un candidat interrompu a pu laisser derriere lui.
             with open(dst, 'r+b') as fh:
                 fh.truncate(prog.offset)
-            print(f"\n  Reprise : {depart} / {len(rs)} candidats deja traites "
-                  f"({100.0 * depart / max(1, len(rs)):.1f} %)")
+            print(f"\n  Reprise : {depart} / {len(taches)} taches deja "
+                  f"traitees ({100.0 * depart / max(1, len(taches)):.1f} %)")
         elif os.path.exists(prog.chemin) or taille:
             # Un checkpoint existait mais n'est pas utilisable : le DIRE.
             # Repartir de zero en silence ferait passer un recommencement
@@ -536,17 +684,68 @@ def main():
     # 'a' et non 'w' : la reprise a deja tronque le fichier a l'offset du
     # dernier candidat complet, donc ouvrir en ecriture l'effacerait.
     interrompu = False
+    controles = _echantillon_controle(taches, args.controle_orbites)
+    n_controles = n_discordances = 0
+
+    def _cle_verdict(x):
+        # Ce qui doit coincider sur une orbite : le verdict, pas les
+        # charges ni le degre temoin -- ceux-la sont PERMUTES par
+        # l'automorphisme et differeraient legitimement.
+        return (str(x.get('groupe')), str(x.get('lambda')),
+                bool(x.get('survit')), str(x.get('etat')),
+                str(x.get('n_gen_quotient')))
+
     with open(dst, 'a', encoding='utf-8') as fh:
-        for i, r in enumerate(rs):
-            if i < depart:
+        for k, (i_rep, membres) in enumerate(taches):
+            if k < depart:
                 continue
+            if args.arret_apres and (k - depart) >= args.arret_apres:
+                interrompu = True
+                break
             try:
-                bloc, ds, di, de = traiter(r)
+                bloc, ds, di, de = traiter(rs[i_rep])
+                # --- controle du repli ---------------------------------
+                for j in controles.get(k, ()):
+                    bloc_j, _, _, _ = traiter(rs[j])
+                    n_controles += 1
+                    a = sorted(map(_cle_verdict, bloc))
+                    b_ = sorted(map(_cle_verdict, bloc_j))
+                    if a != b_:
+                        n_discordances += 1
+                        print(f"  !! DISCORDANCE D'ORBITE sur "
+                              f"#{rs[i_rep]['cicy']} : le membre de controle "
+                              f"ne donne pas le meme verdict que le "
+                              f"representant.")
+                        print(f"     representant : {a[:2]}")
+                        print(f"     membre       : {b_[:2]}")
             except KeyboardInterrupt:
                 interrompu = True
                 break
-            for x in bloc:
-                fh.write(json.dumps(x, default=int) + '\n')
+
+            # --- ecriture : une ligne par MEMBRE, jamais une de moins ---
+            for j in membres:
+                replique = (j != i_rep)
+                ident_j = {c: rs[j].get(c) for c in
+                           ('cicy', 'gauge', 'rank_V', 'cohomology',
+                            'b_charges', 'c_charges', 'groupes_utiles',
+                            'equivariant_possible', 'ordres_gamma')}
+                for x in bloc:
+                    y = dict(x)
+                    if replique:
+                        # Charges du membre, verdict du representant. Le
+                        # degre temoin, lui, reste celui du representant :
+                        # il est permute par l'automorphisme, et le
+                        # recopier tel quel serait faux -- on le marque.
+                        y.update(ident_j)
+                        y['verdict_replique'] = True
+                        y['representant'] = rs[i_rep].get('b_charges')
+                    else:
+                        y['verdict_replique'] = False
+                    fh.write(json.dumps(y, default=int) + '\n')
+                if replique:
+                    survivants += ds
+                    indetermines += di
+                    ecartes += de
             survivants += ds
             indetermines += di
             ecartes += de
@@ -555,13 +754,27 @@ def main():
             # pointant au-dela de ce qui est reellement sur le disque.
             fh.flush()
             os.fsync(fh.fileno())
-            prog.sauver(i + 1, fh.tell(),
+            prog.sauver(k + 1, fh.tell(),
                         {'survivants': survivants,
                          'indetermines': indetermines, 'ecartes': ecartes})
 
     if interrompu:
-        print(f"\n  INTERROMPU apres {prog.fait} / {len(rs)} candidats.")
+        print(f"\n  INTERROMPU apres {prog.fait} / {len(taches)} taches.")
         print(f"  Relancer la meme commande reprend a cet endroit.")
+    if rapport_orbites:
+        print(f"\n  Repli par orbite : {rapport_orbites['candidats']} candidats "
+              f"-> {rapport_orbites['taches']} taches "
+              f"(facteur {rapport_orbites['facteur']:.2f})")
+        print(f"    {rapport_orbites['cicys_sans_symetrie']} CICYs sans "
+              f"symetrie de configuration : rien n'y est replie.")
+        print(f"    Controle : {n_controles} membres non representants "
+              f"reevalues pour de vrai, {n_discordances} discordance(s).")
+        if n_discordances:
+            print(f"    /!\\ Le repli est INVALIDE sur ce lot. Relancer sans "
+                  f"--replier-orbites.")
+        elif not n_controles:
+            print(f"    /!\\ AUCUN controle effectue : le repli n'est pas "
+                  f"verifie sur ce lot (--controle-orbites 0 ?).")
     print(f"\n  Couples (candidat, lambda) qui survivent   : {survivants}")
     print(f"  Indetermines (un test non calculable)     : {indetermines}"
           f"   <- ni retenus ni elimines")

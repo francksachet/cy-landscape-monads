@@ -45,6 +45,7 @@ import os
 import sys
 import json
 import argparse
+import hashlib
 
 import numpy as np
 
@@ -264,6 +265,86 @@ def analyser(cicy_num, amb, cfg, b, c, symetries, groupes=None, graine=0):
     return lignes
 
 
+# ======================================================================
+# Reprise sur checkpoint
+# ======================================================================
+#
+# POURQUOI
+# --------
+# La version precedente accumulait toutes les lignes dans une liste et
+# n'ecrivait le JSONL qu'apres le DERNIER candidat. Tant que le lot faisait
+# 108 candidats (une heure), c'etait sans consequence. Le generateur enumere
+# du §5.23 en produit 14 945 : le meme calcul demande une cinquantaine
+# d'heures, et une interruption -- Ctrl+C, redemarrage, coupure -- perdait
+# la totalite du travail, sans qu'aucun fichier n'en garde trace.
+#
+# Mesure reelle : deux heures vingt de calcul, zero octet recuperable.
+#
+# COMMENT
+# -------
+# Meme principe que `main_optimized` : un JSONL en ecriture « append-only »,
+# et un fichier de progression leger ecrit APRES chaque candidat.
+#
+# Le compteur ne suffit pas. Si le processus meurt AU MILIEU d'un candidat,
+# quelques lignes de ce candidat sont deja dans le JSONL : reprendre au
+# candidat suivant les laisserait en double, reprendre au meme les
+# dupliquerait. On enregistre donc aussi l'OFFSET du fichier apres le
+# dernier candidat complet, et la reprise tronque a cet offset. Ce qui est
+# relu est alors exactement ce qui a ete valide.
+#
+# L'empreinte du fichier d'entree (sha256) interdit de reprendre un
+# checkpoint sur un autre lot : un decalage d'indices produirait des
+# resultats attribues aux mauvais candidats, ce qui est pire que pas de
+# reprise du tout.
+
+def _empreinte(chemin, filtre_cicy):
+    h = hashlib.sha256()
+    with open(chemin, 'rb') as f:
+        for bloc in iter(lambda: f.read(1 << 20), b''):
+            h.update(bloc)
+    h.update(str(filtre_cicy).encode())
+    return h.hexdigest()
+
+
+class Progression:
+    """Progression legere : indice du prochain candidat + offset du JSONL."""
+
+    def __init__(self, dossier, empreinte):
+        self.chemin = os.path.join(dossier, 'progress_equivariance_f.json')
+        self.empreinte = empreinte
+        self.fait = 0
+        self.offset = 0
+        self.compteurs = {'survivants': 0, 'indetermines': 0, 'ecartes': 0}
+
+    def charger(self, taille_jsonl):
+        if not os.path.exists(self.chemin):
+            return False, "aucun checkpoint"
+        try:
+            with open(self.chemin, encoding='utf-8') as f:
+                d = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            return False, f"checkpoint illisible ({type(e).__name__})"
+        if d.get('empreinte') != self.empreinte:
+            return False, ("le fichier d'entree a change depuis le checkpoint "
+                           "(ou --cicy differe) -- reprise refusee")
+        if d.get('offset', 0) > taille_jsonl:
+            return False, ("le JSONL est plus court que le checkpoint "
+                           "-- reprise refusee")
+        self.fait = int(d.get('fait', 0))
+        self.offset = int(d.get('offset', 0))
+        self.compteurs.update(d.get('compteurs') or {})
+        return True, f"reprise au candidat {self.fait}"
+
+    def sauver(self, fait, offset, compteurs):
+        self.fait, self.offset = fait, offset
+        self.compteurs = dict(compteurs)
+        tmp = self.chemin + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump({'empreinte': self.empreinte, 'fait': fait,
+                       'offset': offset, 'compteurs': self.compteurs}, f)
+        os.replace(tmp, self.chemin)   # remplacement atomique
+
+
 def _sortie_tolerante():
     """
     Empeche un plantage d'encodage sur une console Windows.
@@ -294,6 +375,8 @@ def main():
     ap.add_argument('--tous-groupes', action='store_true',
                     help="Ne pas se limiter aux groupes d'ordre compatible "
                          "avec l'indice (champ groupes_utiles).")
+    ap.add_argument('--reset', action='store_true',
+                    help="Ignorer le checkpoint et repartir de zero.")
     args = ap.parse_args()
 
     entries = {e['num']: e for e in load_oxford_file(args.cicylist)}
@@ -308,6 +391,39 @@ def main():
     if args.cicy:
         rs = [r for r in rs if r['cicy'] == args.cicy]
 
+    # ---------------- checkpoint ------------------------------------
+    dst = os.path.join(args.output_dir, 'results_equivariance_f.jsonl')
+    prog = Progression(args.output_dir, _empreinte(src, args.cicy))
+    depart = 0
+    survivants = indetermines = ecartes = 0
+
+    if args.reset:
+        for p in (dst, prog.chemin):
+            if os.path.exists(p):
+                os.remove(p)
+        print(f"\n  Checkpoint reinitialise (--reset)")
+    else:
+        taille = os.path.getsize(dst) if os.path.exists(dst) else 0
+        ok, motif = prog.charger(taille)
+        if ok:
+            depart = prog.fait
+            survivants = prog.compteurs['survivants']
+            indetermines = prog.compteurs['indetermines']
+            ecartes = prog.compteurs['ecartes']
+            # Tronque ce qu'un candidat interrompu a pu laisser derriere lui.
+            with open(dst, 'r+b') as fh:
+                fh.truncate(prog.offset)
+            print(f"\n  Reprise : {depart} / {len(rs)} candidats deja traites "
+                  f"({100.0 * depart / max(1, len(rs)):.1f} %)")
+        elif os.path.exists(prog.chemin) or taille:
+            # Un checkpoint existait mais n'est pas utilisable : le DIRE.
+            # Repartir de zero en silence ferait passer un recommencement
+            # complet pour une reprise.
+            print(f"\n  Checkpoint present mais inutilisable : {motif}")
+            print(f"  Reprise depuis le debut ; l'ancien JSONL est ecrase.")
+            if os.path.exists(dst):
+                os.remove(dst)
+
     print(f"\n{'=' * 96}")
     print("  EQUIVARIANCE DE f  --  polynomes covariants, puis stabilite restreinte")
     print(f"{'=' * 96}")
@@ -315,15 +431,16 @@ def main():
           f"{'dim eq':>6} {'N':>5} {'h0 gen':>6} {'h0 eq':>5} "
           f"{'w2 gen':>6} {'w2 eq':>5}  verdict")
 
-    sortie = []
-    survivants = 0
-    indetermines = 0
-    ecartes = 0
-    for r in rs:
+    # Un candidat -> ses lignes de sortie. Extrait de la boucle pour que le
+    # point de sauvegarde soit UNIQUE et atteint par tous les chemins, y
+    # compris ceux qui n'evaluent rien. Un `continue` qui saute le
+    # checkpoint reperdrait le candidat a la reprise suivante.
+    def traiter(r):
+        lignes_out, d_surv, d_ind, d_ec = [], 0, 0, 0
         e = entries.get(r['cicy'])
         num_b = inv.get(r['cicy'])
         if e is None or num_b not in SYM:
-            continue
+            return lignes_out, d_surv, d_ind, d_ec
         amb, cfg = e['ambient'], np.asarray(e['config'])
         b = [list(x) for x in r['b_charges']]
         c = [list(x) for x in r['c_charges']]
@@ -346,13 +463,13 @@ def main():
                                         'l indice (|chi| != 3.|Gamma|)'}
             print(f"  {r['cicy']:>5} {r.get('gauge', ''):>7} "
                   f"{L['groupe']:<11} {L['etat']}")
-            ecartes += 1
-            sortie.append({**{k: r.get(k) for k in
-                              ('cicy', 'gauge', 'rank_V', 'cohomology',
-                               'b_charges', 'c_charges', 'groupes_utiles',
-                               'equivariant_possible', 'ordres_gamma')},
-                           **L, 'survit': False, 'indetermine': True})
-            continue
+            d_ec += 1
+            lignes_out.append({**{k: r.get(k) for k in
+                                  ('cicy', 'gauge', 'rank_V', 'cohomology',
+                                   'b_charges', 'c_charges', 'groupes_utiles',
+                                   'equivariant_possible', 'ordres_gamma')},
+                               **L, 'survit': False, 'indetermine': True})
+            return lignes_out, d_surv, d_ind, d_ec
         lignes = analyser(r['cicy'], amb, cfg, b, c, SYM[num_b]['symetries'],
                           groupes=groupes)
         # Identite du candidat, recopiee sur CHAQUE ligne de sortie.
@@ -375,9 +492,9 @@ def main():
                 # lit a tort comme une absence de candidats.
                 print(f"  {r['cicy']:>5} {r.get('gauge', ''):>7} "
                       f"{L['groupe']:<11} {L['etat']}")
-                ecartes += 1
-                sortie.append({**ident, **L, 'survit': False,
-                               'indetermine': True})
+                d_ec += 1
+                lignes_out.append({**ident, **L, 'survit': False,
+                                   'indetermine': True})
                 continue
             L['n_gen_quotient'] = n_gen_quotient(r.get('cohomology'),
                                                  L['groupe'])
@@ -403,8 +520,8 @@ def main():
                 verdict = "deja non stable : h0(w2V) generique != 0"
             else:
                 verdict = "tue par h0(w2V) equivariant"
-            survivants += bool(L['survit'])
-            indetermines += bool(L.get('indetermine'))
+            d_surv += bool(L['survit'])
+            d_ind += bool(L.get('indetermine'))
             fmt = lambda x: '-' if x is None else str(x)
             print(f"  {r['cicy']:>5} {r.get('gauge', ''):>7} {L['rang_V']:>2} "
                   f"{L['groupe']:<11} {str(L['lambda']):>14} "
@@ -412,12 +529,39 @@ def main():
                   f"{L['h0_generique']:>6} {L['h0_equivariant']:>5} "
                   f"{fmt(L['h0w2_generique']):>6} "
                   f"{fmt(L['h0w2_equivariant']):>5}  {verdict}")
-            sortie.append({**ident, **L})
+            lignes_out.append({**ident, **L})
+        return lignes_out, d_surv, d_ind, d_ec
 
-    dst = os.path.join(args.output_dir, 'results_equivariance_f.jsonl')
-    with open(dst, 'w', encoding='utf-8') as fh:
-        for x in sortie:
-            fh.write(json.dumps(x, default=int) + '\n')
+    # ---------------- boucle avec checkpoint -------------------------
+    # 'a' et non 'w' : la reprise a deja tronque le fichier a l'offset du
+    # dernier candidat complet, donc ouvrir en ecriture l'effacerait.
+    interrompu = False
+    with open(dst, 'a', encoding='utf-8') as fh:
+        for i, r in enumerate(rs):
+            if i < depart:
+                continue
+            try:
+                bloc, ds, di, de = traiter(r)
+            except KeyboardInterrupt:
+                interrompu = True
+                break
+            for x in bloc:
+                fh.write(json.dumps(x, default=int) + '\n')
+            survivants += ds
+            indetermines += di
+            ecartes += de
+            # L'ordre compte : vider le tampon, forcer l'ecriture disque,
+            # PUIS enregistrer l'offset. L'inverse laisserait un checkpoint
+            # pointant au-dela de ce qui est reellement sur le disque.
+            fh.flush()
+            os.fsync(fh.fileno())
+            prog.sauver(i + 1, fh.tell(),
+                        {'survivants': survivants,
+                         'indetermines': indetermines, 'ecartes': ecartes})
+
+    if interrompu:
+        print(f"\n  INTERROMPU apres {prog.fait} / {len(rs)} candidats.")
+        print(f"  Relancer la meme commande reprend a cet endroit.")
     print(f"\n  Couples (candidat, lambda) qui survivent   : {survivants}")
     print(f"  Indetermines (un test non calculable)     : {indetermines}"
           f"   <- ni retenus ni elimines")

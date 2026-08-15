@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 34 tests.
+> non une propriété des candidats, et la suite compte 35 tests.
 
 ---
 
@@ -134,7 +134,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        34 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        35 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -1533,6 +1533,72 @@ partagé restauré, comptage faussé de +1 — le font échouer.
 
 ---
 
+### 5.24 Cinquante heures de calcul sans un octet sur le disque
+
+Conséquence directe du §5.23, et découverte en la subissant.
+
+Le générateur énuméré fait passer le catalogue de **115 à 19 579 fibrés
+Hoppe-stables**, et le lot d'entrée d'`equivariance_f.py` de 108 à **14 945
+candidats**. L'étape qui prenait une heure en prend cinquante-cinq. Or :
+
+```python
+sortie = []
+for r in rs:
+    ...
+    sortie.append({**ident, **L})
+
+with open(dst, 'w', encoding='utf-8') as fh:      # <- une seule fois, à la fin
+```
+
+Tout était accumulé en mémoire et écrit après le **dernier** candidat. Ni
+checkpoint, ni gestionnaire de Ctrl+C, ni reprise — ni dans `equivariance_f.py`,
+ni dans `equivariance.py`. Mesure réelle sur `scan_wilson4` : **2 h 20 de calcul,
+zéro octet récupérable**. Le fichier `results_equivariance_f.jsonl` n'existait
+pas.
+
+Ce n'était pas un défaut tant que le lot faisait 108 candidats. Il l'est devenu
+parce qu'un autre correctif a multiplié le lot par 138 — et rien dans le code ne
+reliait les deux.
+
+**La correction** reprend le mécanisme de `main_optimized` : JSONL en écriture
+*append-only*, fichier de progression écrit **après chaque candidat**.
+
+Un compteur ne suffit pas. Si le processus meurt **au milieu** d'un candidat,
+quelques-unes de ses lignes sont déjà sur le disque : reprendre au candidat
+suivant les laisserait en double. On enregistre donc aussi l'**offset** du
+fichier après le dernier candidat *complet*, et la reprise **tronque** à cet
+offset. Ce qui est relu est alors exactement ce qui a été validé.
+
+Trois gardes refusent une reprise incohérente, et **disent pourquoi** :
+
+| situation | conséquence si acceptée |
+|---|---|
+| l'empreinte sha256 de l'entrée a changé | verdicts attribués aux **mauvais** candidats |
+| `--cicy` diffère du checkpoint | idem — le filtre change la numérotation |
+| le JSONL est plus court que l'offset | reprise dans le vide |
+
+Repartir de zéro **en silence** ferait passer un recommencement complet pour une
+reprise : le motif est affiché.
+
+**Le test (35ᵉ)** vérifie les deux moitiés. Fidélité : un lot traité en morceaux,
+avec coupures, produit un JSONL identique — ligne pour ligne, clé pour clé — à
+celui du même lot traité d'un trait. Refus : un checkpoint qui ne correspond plus
+est rejeté avec son motif.
+
+Un point mérite d'être noté, parce qu'il a failli passer. La première version du
+test attendait que le hasard du minutage produise une coupure *au milieu* d'un
+candidat — et **retirer la troncature ne le faisait pas échouer** : la coupure
+tombe presque toujours *entre* deux candidats, où il n'y a rien à tronquer. Le
+test écrit maintenant lui-même des lignes au-delà de l'offset valide et exige
+qu'elles disparaissent. C'est le cinquième cassage « évident » de ce dépôt à
+passer au premier essai (§8).
+
+Quatre sabotages le font échouer : troncature retirée, garde d'empreinte
+neutralisée, garde qui refuse *tout* (elle est alors prise par « le lot n'avance
+pas entre deux coupures »), et ouverture du JSONL en `'w'` au lieu de `'a'`.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -1599,7 +1665,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 34 tests, ~2 min. À lancer après chaque modification,
+**`tests_regression.py` — 35 tests, ~3 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -1693,7 +1759,7 @@ D'où trois exigences, tenues par les tests :
 
 Et le contrôle qui met tout cela à l'épreuve : **casser le filtre dans les deux
 sens.** Un module qui accepte tout et un module qui rejette tout doivent chacun
-faire tomber un volet différent du test. Sur les onze tests ajoutés depuis, cinq
+faire tomber un volet différent du test. Sur les treize tests ajoutés depuis, six
 cassages « évidents » se sont révélés **passants** au premier essai — c'est en
 les voyant passer qu'on a trouvé le vrai angle mort.
 
@@ -1707,6 +1773,19 @@ python tests_regression.py
 
 # validation du socle sur les vraies CICYs
 python validate_cohomology.py cicylist.txt --n-cicys 60 --max-charge 4
+
+# vérification ciblée d'un candidat, sans attendre le balayage complet
+#   equivariance_f.py --cicy N filtre à la LECTURE : quelques minutes au lieu
+#   de plusieurs dizaines d'heures. Écrit dans le dossier passé en argument,
+#   donc un dossier par candidat pour ne pas s'écraser l'un l'autre.
+mkdir scan_w4_c6890 ; copy scan_wilson4\results_equivariant.jsonl scan_w4_c6890\
+python -u equivariance_f.py cicyquotients.m cicylist.txt scan_w4_c6890 --cicy 6890
+python resume_cible.py scan_w4_c6890 scan_w4_c6947 scan_w4_c6715
+
+# reprise d'un balayage interrompu (§5.24) : relancer LA MEME commande.
+#   Le checkpoint est dans <dossier>/progress_equivariance_f.json.
+#   --reset pour repartir de zéro.
+python -u equivariance_f.py cicyquotients.m cicylist.txt scan_wilson4
 
 # scan ciblé Wilson (194 CICYs, |chi| = 3|Gamma|)
 python wilson_match.py CicyQuotients.m cicylist.txt --results scan/results_clean.jsonl

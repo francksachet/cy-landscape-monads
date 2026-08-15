@@ -2192,6 +2192,178 @@ def t_generateur_classique_enumere():
 
 
 # ======================================================================
+# Reprise sur checkpoint de equivariance_f.py
+# ======================================================================
+
+@test("checkpoint equivariance_f : reprise identique, et gardes qui mordent")
+def t_checkpoint_equivariance_f():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    `equivariance_f.py` accumulait tout en memoire et n'ecrivait le JSONL
+    qu'apres le dernier candidat. Sur le lot de 108 candidats (une heure)
+    c'etait sans consequence ; sur les 14 945 du generateur enumere
+    (§5.23), cinquante heures de calcul tenaient a ce qu'aucune coupure
+    n'intervienne. Mesure reelle : 2 h 20 interrompues, **zero octet
+    recuperable**.
+
+    Le test verifie les deux moities de la reprise :
+
+      (a) FIDELITE. Un lot traite en trois morceaux, avec deux coupures
+          au milieu d'un candidat, doit produire un JSONL identique --
+          ligne pour ligne, cle pour cle -- a celui du meme lot traite
+          d'un trait. C'est ce que garantit la troncature a l'offset du
+          dernier candidat COMPLET : sans elle, les lignes du candidat
+          interrompu resteraient en double.
+
+      (b) REFUS. Un checkpoint qui ne correspond plus doit etre REFUSE et
+          le motif AFFICHE. Reprendre un checkpoint sur un autre lot
+          attribuerait des verdicts aux mauvais candidats -- un defaut
+          bien pire que l'absence de reprise, et parfaitement silencieux.
+
+    Le test tourne sur un vrai extrait de `scan_wilson2` s'il est
+    disponible, faute de quoi il s'abstient plutot que de simuler.
+    """
+    import subprocess, tempfile, shutil, json
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    src = os.path.join(base, 'scan_wilson2', 'results_equivariant.jsonl')
+    quo = os.path.join(base, 'cicyquotients.m')
+    lst = os.path.join(base, 'cicylist.txt')
+    if not all(os.path.exists(p) for p in (src, quo, lst)):
+        return "ignore : scan_wilson2 / cicyquotients.m absents"
+
+    toutes = [l for l in open(src, encoding='utf-8') if l.strip()]
+    lignes = toutes[:14]
+    assert len(lignes) >= 12, "extrait trop court pour couper au milieu"
+
+    def lance(dossier, secondes=None):
+        cmd = [sys.executable, '-u', os.path.join(base, 'equivariance_f.py'),
+               quo, lst, dossier]
+        return subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=secondes, cwd=base)
+
+    def contenu(dossier):
+        p = os.path.join(dossier, 'results_equivariance_f.jsonl')
+        return [json.dumps(json.loads(l), sort_keys=True)
+                for l in open(p, encoding='utf-8') if l.strip()]
+
+    tmp = tempfile.mkdtemp(prefix='cktest_')
+    try:
+        A, B = os.path.join(tmp, 'A'), os.path.join(tmp, 'B')
+        for d in (A, B):
+            os.makedirs(d)
+            with open(os.path.join(d, 'results_equivariant.jsonl'), 'w',
+                      encoding='utf-8') as f:
+                f.writelines(lignes)
+
+        # --- (a) d'un trait, puis en morceaux ------------------------
+        lance(A)
+        ref = contenu(A)
+        assert ref, "le run de reference n'a rien produit"
+
+        # 3,6 s de ce budget partent en demarrage (lecture des 7 890 CICYs
+        # et des symetries de Braun) : une tranche plus courte ne couperait
+        # jamais en plein calcul, et le test ne prouverait rien.
+        coupures = 0
+        injecte = False
+        dstB = os.path.join(B, 'results_equivariance_f.jsonl')
+        for _ in range(6):
+            try:
+                lance(B, secondes=7)
+                break                      # alle au bout
+            except subprocess.TimeoutExpired:
+                coupures += 1              # coupe en plein calcul
+                if not injecte:
+                    # COUPURE EN PLEIN MILIEU D'UN CANDIDAT, simulee.
+                    # Attendre que le hasard du timing la produise rendrait
+                    # ce volet non deterministe : la coupure tombe le plus
+                    # souvent ENTRE deux candidats, ou il n'y a rien a
+                    # tronquer -- et le test passait alors meme avec la
+                    # troncature retiree. On ecrit donc explicitement des
+                    # lignes au-dela de l'offset valide, comme l'aurait fait
+                    # un candidat interrompu apres un vidage partiel.
+                    with open(dstB, 'a', encoding='utf-8') as f:
+                        f.write('{"__poubelle__": 1}\n{"__poubelle__": 2}\n')
+                    injecte = True
+        else:
+            lance(B)
+        assert coupures <= 4, \
+            ("le lot n'avance pas entre deux coupures : la reprise repart "
+             "peut-etre de zero a chaque fois")
+        assert coupures >= 1 and injecte, \
+            ("le lot s'est termine sans jamais etre coupe : ni la reprise "
+             "ni la troncature ne sont exercees. Allonger l'extrait.")
+        assert not any('__poubelle__' in l for l in
+                       open(dstB, encoding='utf-8')), \
+            ("les lignes ecrites au-dela de l'offset valide ont survecu : "
+             "la reprise ne tronque pas, et le JSONL garde les lignes d'un "
+             "candidat jamais termine")
+        assert contenu(B) == ref, \
+            (f"reprise infidele : {len(contenu(B))} lignes contre "
+             f"{len(ref)} d'un trait")
+
+        # Le checkpoint doit exister et pointer sur TOUT le lot.
+        pc = os.path.join(B, 'progress_equivariance_f.json')
+        with open(pc, encoding='utf-8') as f:
+            prog = json.load(f)
+        assert prog['fait'] == len(lignes), (prog['fait'], len(lignes))
+        assert prog['offset'] == os.path.getsize(
+            os.path.join(B, 'results_equivariance_f.jsonl')), prog
+
+        # --- (b) les gardes ------------------------------------------
+        # Sans elles, les deux situations ci-dessous reprendraient un
+        # checkpoint qui ne correspond plus, en silence.
+        # Menees sur un lot MINUSCULE : la garde se declenche avant tout
+        # calcul, donc inutile de payer un lot entier pour l'observer.
+        G = os.path.join(tmp, 'G')
+        os.makedirs(G)
+        petit = toutes[:3]
+        ent = os.path.join(G, 'results_equivariant.jsonl')
+        with open(ent, 'w', encoding='utf-8') as f:
+            f.writelines(petit)
+        lance(G)                                  # pose un checkpoint complet
+        motifs = []
+
+        # (b1) l'entree a change
+        with open(ent, 'w', encoding='utf-8') as f:
+            f.writelines(toutes[1:4])
+        motifs.append(lance(G).stdout)
+
+        # (b2) le JSONL est plus court que l'offset enregistre
+        with open(ent, 'w', encoding='utf-8') as f:
+            f.writelines(petit)
+        lance(G)
+        dstG = os.path.join(G, 'results_equivariance_f.jsonl')
+        with open(dstG, 'r+b') as f:
+            f.truncate(max(0, os.path.getsize(dstG) // 3))
+        motifs.append(lance(G).stdout)
+
+        for m in motifs:
+            assert 'Checkpoint present mais inutilisable' in m, \
+                ("un checkpoint incoherent a ete accepte, ou refuse sans "
+                 "le dire :\n" + m[:400])
+
+        # --- (c) le refus n'est pas universel ------------------------
+        # Une garde qui refuse TOUT passerait les deux points ci-dessus
+        # sans rien proteger. La reprise de (a) a ete ACCEPTEE : c'est le
+        # cassage « dans l'autre sens » du §8, et il est deja demontre par
+        # le fait que B contient les memes lignes que A sans les recalculer
+        # toutes. On l'exige explicitement.
+        assert coupures >= 1 and prog['fait'] == len(lignes)
+        sortie_b = lance(B).stdout
+        assert 'Reprise :' in sortie_b and \
+               'Checkpoint present mais inutilisable' not in sortie_b, \
+            ("une reprise legitime a ete refusee : la garde rejette tout\n"
+             + sortie_b[:400])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    return (f"{len(ref)} lignes identiques apres {coupures} coupure(s) ; "
+            f"2 gardes qui refusent, 1 reprise acceptee")
+
+
+# ======================================================================
 
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith('t_')]

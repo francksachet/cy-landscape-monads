@@ -2533,7 +2533,14 @@ def t_repli_orbites():
                 # (d) repli ABUSIF : le controle doit crier.
                 mod = os.path.join(base, 'cy_landscape', 'core',
                                    'symetrie_config.py')
-                original = open(mod, encoding='utf-8').read()
+                # `newline=''` des DEUX cotes : sans lui, Python relit en
+                # \n et reecrit en \r\n sous Windows, si bien que le
+                # « rétablissement » convertit tout le fichier en CRLF et
+                # laisse le depot sale apres chaque passage de la suite.
+                # Constate : 188 insertions, 188 suppressions sur un
+                # fichier cense etre restaure a l'identique. Un test ne
+                # doit rien laisser derriere lui.
+                original = open(mod, encoding='utf-8', newline='').read()
                 sabote = original.replace(
                     "    meilleur = None\n    for p in autos:",
                     "    return ('TOUT_PAREIL',)\n"
@@ -2541,12 +2548,12 @@ def t_repli_orbites():
                 assert sabote != original, "sabotage non applique"
                 abusif = prepare('abusif')
                 try:
-                    with open(mod, 'w', encoding='utf-8') as f:
+                    with open(mod, 'w', encoding='utf-8', newline='') as f:
                         f.write(sabote)
                     s2 = lance(abusif, '--replier-orbites',
                                '--controle-orbites', '8').stdout
                 finally:
-                    with open(mod, 'w', encoding='utf-8') as f:
+                    with open(mod, 'w', encoding='utf-8', newline='') as f:
                         f.write(original)
                 assert 'DISCORDANCE' in s2, \
                     ("un repli qui range TOUS les candidats dans une seule "

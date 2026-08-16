@@ -653,6 +653,16 @@ def main():
                          "2 h 28 sans rien rendre ni rien sauvegarder. "
                          "Change les identifiants de lot, donc invalide un "
                          "checkpoint pris avec une autre valeur.")
+    ap.add_argument('--max-realisations', type=int, default=0,
+                    help="N'evaluer que les R premieres realisations de "
+                         "chaque groupe. Braun en donne 368 de Z2 x Z2 pour "
+                         "la seule CICY #480, a ~21 s chacune sur une "
+                         "machine de bureau : #480 et #2357 portent la "
+                         "MOITIE du calcul restant. Ce n'est PAS un repli "
+                         "-- deux realisations donnent deux quotients "
+                         "differents -- mais un renoncement declare : le "
+                         "champ `realisations` de chaque ligne dit sur "
+                         "combien porte le verdict. 0 = toutes.")
     ap.add_argument('--heartbeat', type=int, default=60,
                     help="Signal de vie toutes les N secondes. 0 = aucun. "
                          "Un lot durant plusieurs minutes, sans ce signal "
@@ -936,6 +946,8 @@ def main():
     # permet a la reprise de savoir ce qui est deja fait, quel que soit
     # l'ordre dans lequel les workers ont rendu.
     lots = []
+    n_realisations_vues = n_realisations_totales = 0
+    n_vues_par_tache, n_totales_par_tache = {}, {}
     for k, (i_rep, membres) in enumerate(taches):
         r = rs[i_rep]
         num_b = inv.get(r['cicy'])
@@ -951,6 +963,34 @@ def main():
             continue
         idx = [n for n, sy in enumerate(SYM[num_b]['symetries'])
                if (not g) or sy['nom'] in g]
+        # PLAFOND DE REALISATIONS. Braun donne jusqu'a 368 realisations d'un
+        # meme groupe pour une seule CICY (#480). Ce ne sont pas des doublons
+        # -- deux realisations donnent deux quotients X/Gamma differents --
+        # donc plafonner n'est PAS un repli : c'est renoncer a en tester
+        # certaines. Une absence devient « absence parmi les R testees ».
+        #
+        # Mesure qui autorise a le proposer : sur les 1 167 cles (candidat,
+        # groupe, lambda) deja calculees, dont #5 et ses 32 realisations de
+        # Z2, UNE SEULE discordance entre realisations -- et elle porte sur
+        # une valeur intermediaire, pas sur le verdict.
+        #
+        # Le plafond est ARRONDI AU MULTIPLE SUPERIEUR de la taille de lot.
+        # Sans cet arrondi, la tranche 0 contiendrait 4 realisations au lieu
+        # de 16 : le lot ('T', k, 0) ne designerait plus le meme calcul, et
+        # un checkpoint pris sans plafond deviendrait faux au lieu d'etre
+        # simplement incomplet. Avec l'arrondi, on garde des tranches
+        # ENTIERES, identiques a celles du run sans plafond -- le checkpoint
+        # reste utilisable, et retirer le plafond plus tard ne fait
+        # qu'ajouter des lots.
+        n_total_real = len(idx)
+        if args.max_realisations:
+            pas = max(1, args.taille_lot)
+            plafond_effectif = -(-args.max_realisations // pas) * pas
+            idx = idx[:plafond_effectif]
+        n_realisations_vues += len(idx)
+        n_realisations_totales += n_total_real
+        n_vues_par_tache[k] = len(idx)
+        n_totales_par_tache[k] = n_total_real
         tranches = [idx[t:t + args.taille_lot]
                     for t in range(0, len(idx), args.taille_lot)] or [[]]
         for t, tr in enumerate(tranches):
@@ -967,6 +1007,13 @@ def main():
     # sequentiel migre : tous ses lots sont consideres faits.
     a_faire = [x for x in lots
                if x[0] not in prog.faits and ('T', x[0][1]) not in prog.faits]
+    if args.max_realisations and n_realisations_vues < n_realisations_totales:
+        print(f"\n  PLAFOND DE REALISATIONS : {n_realisations_vues} evaluees "
+              f"sur {n_realisations_totales} "
+              f"({100.0 * n_realisations_vues / max(1, n_realisations_totales):.1f} %)")
+        print(f"    Les autres ne sont NI retenues NI eliminees : elles ne "
+              f"sont pas testees.")
+        print(f"    Chaque ligne du JSONL porte le champ `realisations`.")
     print(f"\n  {len(lots)} lots (tranches de {args.taille_lot} realisations), "
           f"{len(lots) - len(a_faire)} deja faits, {len(a_faire)} a traiter")
     # `--arret-apres` simule une interruption : le run doit se terminer
@@ -1014,6 +1061,11 @@ def main():
                 if replique:
                     y['representant'] = rs[i_rep].get('b_charges')
                 y['_lot'] = list(id_lot)
+                # REGLE DES FILTRES : chaque ligne dit sur combien de
+                # realisations son verdict porte. Sans ce champ, une absence
+                # serait ininterpretable.
+                y['realisations'] = [n_vues_par_tache.get(k, 0),
+                                     n_totales_par_tache.get(k, 0)]
                 if x.get('etat') != 'ok':
                     y.setdefault('survit', False)
                     y.setdefault('indetermine', True)
@@ -1106,9 +1158,15 @@ def main():
                     n_lignes_ecrites = 0
                 else:
                     k = id_lot[1]
+                    # ECRIRE D'ABORD, AFFICHER ENSUITE : c'est `_ecrire` qui
+                    # calcule `n_gen_quotient`, et l'affichage l'utilise.
+                    # Dans l'autre ordre, tout verdict sortait « SURVIT -- ?
+                    # gen sur X/Gamma » alors que le JSONL portait la bonne
+                    # valeur. Un SURVIT sans nombre de generations ne dit
+                    # rien -- c'est exactement la lecon de #21 (§5.19).
+                    n_lignes_ecrites = _ecrire(fh, id_lot, lignes)
                     _afficher(rs[taches[k][0]]['cicy'],
                               rs[taches[k][0]].get('gauge', ''), lignes)
-                    n_lignes_ecrites = _ecrire(fh, id_lot, lignes)
                     fh.flush()
                     os.fsync(fh.fileno())
                 prog.faits[id_lot] = n_lignes_ecrites

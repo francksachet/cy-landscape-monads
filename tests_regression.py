@@ -2284,7 +2284,8 @@ def t_checkpoint_equivariance_f():
                 # candidats, ou il n'y a rien a tronquer, et le test passait
                 # alors meme avec la troncature retiree.
                 with open(dstB, 'a', encoding='utf-8') as f:
-                    f.write('{"__poubelle__": 1}\n{"__poubelle__": 2}\n')
+                    f.write('{"_lot": ["T", 999999, 0], "__poubelle__": 1}\n'
+                            '{"_lot": ["T", 999999, 1], "__poubelle__": 2}\n')
                 injecte = True
         else:
             lance(B)
@@ -2303,13 +2304,17 @@ def t_checkpoint_equivariance_f():
             (f"reprise infidele : {len(contenu(B))} lignes contre "
              f"{len(ref)} d'un trait")
 
-        # Le checkpoint doit exister et pointer sur TOUT le lot.
+        # Le checkpoint doit exister et couvrir tout le travail : une
+        # relance ne doit plus rien avoir a faire.
         pc = os.path.join(B, 'progress_equivariance_f.json')
         with open(pc, encoding='utf-8') as f:
             prog = json.load(f)
-        assert prog['fait'] == len(lignes), (prog['fait'], len(lignes))
-        assert prog['offset'] == os.path.getsize(
-            os.path.join(B, 'results_equivariance_f.jsonl')), prog
+        assert prog['lots'], prog
+        # Chaque entree est [identifiant, nombre de lignes] : c'est ce
+        # compte qui permet de reperer un lot ecrit a moitie.
+        assert all(len(x) == 2 and isinstance(x[1], int) for x in prog['lots']), \
+            prog['lots'][:2]
+        assert '0 a traiter' in lance(B).stdout, "le checkpoint ne couvre pas tout"
 
         # --- (b) les gardes ------------------------------------------
         # Sans elles, les deux situations ci-dessous reprendraient un
@@ -2330,19 +2335,34 @@ def t_checkpoint_equivariance_f():
             f.writelines(toutes[1:4])
         motifs.append(lance(G).stdout)
 
-        # (b2) le JSONL est plus court que l'offset enregistre
-        with open(ent, 'w', encoding='utf-8') as f:
-            f.writelines(petit)
-        lance(G)
-        dstG = os.path.join(G, 'results_equivariance_f.jsonl')
-        with open(dstG, 'r+b') as f:
-            f.truncate(max(0, os.path.getsize(dstG) // 3))
-        motifs.append(lance(G).stdout)
-
         for m in motifs:
             assert 'Checkpoint present mais inutilisable' in m, \
                 ("un checkpoint incoherent a ete accepte, ou refuse sans "
                  "le dire :\n" + m[:400])
+
+        # (b2) JSONL abime : le fichier FAIT FOI. Un lot dont les lignes
+        # ont disparu, ou n'y sont qu'a moitie, doit etre RECALCULE. Sans
+        # cette regle il resterait marque « fait » et ses lignes seraient
+        # perdues definitivement -- l'ancien format detectait ce cas par
+        # son offset, le nouveau n'en a plus.
+        H = os.path.join(tmp, 'H')
+        os.makedirs(H)
+        with open(os.path.join(H, 'results_equivariant.jsonl'), 'w',
+                  encoding='utf-8') as f:
+            f.writelines(lignes)
+        lance(H, extra=('--arret-apres', '4'))
+        dstH = os.path.join(H, 'results_equivariance_f.jsonl')
+        gardees = open(dstH, encoding='utf-8').readlines()
+        assert len(gardees) > 4, len(gardees)
+        with open(dstH, 'w', encoding='utf-8') as f:
+            f.writelines(gardees[:len(gardees) // 2])   # coupe DANS un lot
+        s_h = lance(H).stdout
+        assert 'Checkpoint restreint' in s_h, \
+            ("un JSONL ampute n'a pas fait recalculer les lots concernes :\n"
+             + s_h[:500])
+        assert contenu(H) == ref, \
+            (f"apres amputation du JSONL, le resultat differe : "
+             f"{len(contenu(H))} lignes contre {len(ref)}")
 
         # --- (c) le refus n'est pas universel ------------------------
         # Une garde qui refuse TOUT passerait les deux points ci-dessus
@@ -2350,7 +2370,6 @@ def t_checkpoint_equivariance_f():
         # cassage « dans l'autre sens » du §8, et il est deja demontre par
         # le fait que B contient les memes lignes que A sans les recalculer
         # toutes. On l'exige explicitement.
-        assert coupures >= 1 and prog['fait'] == len(lignes)
         sortie_b = lance(B).stdout
         assert 'Reprise :' in sortie_b and \
                'Checkpoint present mais inutilisable' not in sortie_b, \

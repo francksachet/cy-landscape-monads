@@ -1661,6 +1661,63 @@ discordances.
 
 ---
 
+### 5.26 Sept cœurs inutilisés, et une unité de travail mal choisie
+
+Découvert en regardant le Gestionnaire des tâches pendant un balayage : **12 % de
+CPU sur une machine à 8 cœurs**, c'est-à-dire *un seul cœur*. `main_optimized`
+distribue son travail sur un `Pool` depuis toujours ; `equivariance_f.py` ne
+l'avait jamais fait, parce qu'il tournait en une heure sur 108 candidats.
+
+**Et l'unité de travail n'était pas la bonne.** Une tâche, ce n'est pas un
+calcul : c'est un candidat confronté à **toutes** les réalisations que Braun
+donne de son groupe.
+
+```
+#480  : 394 symetries -> {'Z2': 21, 'Z4': 5, 'Z2 x Z2': 368}
+#6947 :   9 symetries -> {'Z2': 1, 'Z4': 1, 'Z2 x Z2': 1, ...}
+```
+
+**368 réalisations pour un seul candidat**, à ~24 s chacune : la tâche 823 dure
+plus de deux heures, pendant lesquelles le script n'affiche rien et ne sauvegarde
+rien — `analyser` ne contient aucun `print` et ne rend la main qu'à la fin. Sur
+les 3 698 tâches, il y a **60 201 couples (tâche, réalisation)**, dont **19 461
+pour #480** et 9 968 pour #2357 : deux CICYs portent la moitié du calcul.
+
+L'unité est donc maintenant le **lot** = (tâche, tranche de réalisations),
+`--taille-lot` (défaut 16). Trois bénéfices d'un seul changement : les grosses
+tâches se répartissent entre workers, la granularité du checkpoint tombe de 2 h 28
+à quelques minutes, et l'écran redevient vivant.
+
+**Mesure** (conteneur à 2 cœurs, 400 candidats) : `-j 1` → 226,4 s, `-j 2` →
+119,3 s, soit **1,90×**. À 7 workers, compter un facteur ~6.
+
+**Le checkpoint a dû changer de nature.** Un compteur « les n premiers sont
+faits » n'a plus de sens quand le lot 12 finit avant le lot 7. Il enregistre
+désormais **l'ensemble des lots terminés, avec leur nombre de lignes**, et il n'y
+a plus d'offset. À la reprise, **le fichier fait foi**, en deux passes : compter
+les lignes par lot, puis ne garder que les lots dont le compte correspond
+exactement. Un lot amputé est recalculé au lieu de rester marqué « fait » avec la
+moitié de ses lignes.
+
+Un checkpoint **séquentiel est migré** (`fait: 823` → les 823 tâches, tronquées à
+leur offset). Sans cela, passer à la version parallèle aurait jeté six heures de
+calcul déjà faites.
+
+**Quatre scénarios donnent un résultat identique ligne pour ligne** : séquentiel,
+parallèle, trois coupures successives, et migration depuis un checkpoint
+séquentiel.
+
+**Trois défauts trouvés en écrivant ces vérifications**, tous invisibles sans
+elles :
+
+| | ce qui se passait |
+|---|---|
+| **12 discordances d'orbite fictives sur 18** | le représentant est relu depuis le JSONL (`[1, 1]`), le membre de contrôle est encore en mémoire (`(1, 1)`) : `str()` les distingue. Une garde qui crie à tort est aussi inutile qu'une garde muette |
+| **18 candidats étiquetés « hors domaine »** | au lieu de « aucun groupe d'ordre compatible » : le test de domaine passait avant celui du groupe |
+| **une ligne en double après amputation** | on filtrait le fichier *avant* de restreindre le checkpoint, donc les lignes d'un lot à moitié écrit restaient **et** le lot était recalculé |
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -1849,7 +1906,7 @@ python resume_cible.py scan_w4_c6890 scan_w4_c6947 scan_w4_c6715
 #   Aucune ligne ne disparait ; --controle-orbites verifie le repli en cours
 #   de route et declare le run invalide s'il trouve une discordance.
 python -u equivariance_f.py cicyquotients.m cicylist.txt scan_wilson4 `
-       --replier-orbites | Tee-Object -FilePath scan_wilson4_equiv_f.log
+       --replier-orbites -j 7 | Tee-Object -FilePath scan_wilson4_equiv_f.log
 
 # reprise d'un balayage interrompu (§5.24) : relancer LA MEME commande.
 #   Le checkpoint est dans <dossier>/progress_equivariance_f.json.

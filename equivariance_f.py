@@ -44,8 +44,10 @@ Usage:
 import os
 import sys
 import json
+import time
 import argparse
 import hashlib
+import multiprocessing as mp
 
 import numpy as np
 
@@ -307,16 +309,34 @@ def _empreinte(chemin, filtre_cicy):
 
 
 class Progression:
-    """Progression legere : indice du prochain candidat + offset du JSONL."""
+    """
+    Progression : l'ENSEMBLE des lots termines, et non plus un compteur.
 
-    def __init__(self, dossier, empreinte):
+    Le compteur suffisait tant que les lots etaient traites dans l'ordre.
+    Avec plusieurs workers, le lot 12 peut finir avant le lot 7 : « les
+    n premiers sont faits » n'a plus de sens, et le premier lot manquant
+    ferait rejouer tout ce qui le suit. On enregistre donc les identifiants.
+
+    Il n'y a plus d'offset : le JSONL est filtre a la reprise (les lignes
+    portent leur `_lot`), ce qui elimine exactement les lignes des lots non
+    valides -- y compris celles d'un lot ecrit a moitie.
+    """
+
+    def __init__(self, dossier, empreinte, empreinte_heritee=None):
         self.chemin = os.path.join(dossier, 'progress_equivariance_f.json')
         self.empreinte = empreinte
-        self.fait = 0
-        self.offset = 0
+        # Empreinte du format SEQUENTIEL, calculee sans la taille de lot
+        # (qui n'existait pas). Sans elle, passer a la version parallele
+        # jetterait un checkpoint parfaitement valide : dans le cas reel,
+        # 823 taches et six heures de calcul.
+        self.empreinte_heritee = empreinte_heritee
+        # {identifiant de lot: nombre de lignes ecrites}. Le compte permet
+        # de reperer un lot ecrit a moitie (cf. `charger`).
+        self.faits = {}
+        self.offset_herite = None
         self.compteurs = {'survivants': 0, 'indetermines': 0, 'ecartes': 0}
 
-    def charger(self, taille_jsonl):
+    def charger(self, taille_jsonl=0):
         if not os.path.exists(self.chemin):
             return False, "aucun checkpoint"
         try:
@@ -324,24 +344,47 @@ class Progression:
                 d = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             return False, f"checkpoint illisible ({type(e).__name__})"
-        if d.get('empreinte') != self.empreinte:
+        herite = (self.empreinte_heritee is not None
+                  and d.get('empreinte') == self.empreinte_heritee
+                  and 'lots' not in d)
+        if d.get('empreinte') != self.empreinte and not herite:
             return False, ("le fichier d'entree a change depuis le checkpoint "
-                           "(ou --cicy differe) -- reprise refusee")
-        if d.get('offset', 0) > taille_jsonl:
-            return False, ("le JSONL est plus court que le checkpoint "
-                           "-- reprise refusee")
-        self.fait = int(d.get('fait', 0))
-        self.offset = int(d.get('offset', 0))
+                           "(ou --cicy / les options de repli / la taille de "
+                           "lot different) -- reprise refusee")
         self.compteurs.update(d.get('compteurs') or {})
-        return True, f"reprise au candidat {self.fait}"
+        if 'lots' in d:
+            # [identifiant, nombre de lignes ecrites]. Le compte est ce qui
+            # permet de detecter un lot ecrit A MOITIE : sans lui, un JSONL
+            # tronque en plein milieu d'un lot laissait ce lot marque
+            # « fait » avec la moitie de ses lignes, definitivement.
+            self.faits = {tuple(x[0]): x[1] for x in d['lots']}
+            return True, f"reprise sur {len(self.faits)} lots"
+        # MIGRATION d'un checkpoint sequentiel (`fait` = nombre de taches
+        # terminees dans l'ordre). Sans elle, passer a la version parallele
+        # jetterait le travail deja fait -- 823 taches, six heures dans le
+        # cas reel qui a motive ce changement.
+        if 'fait' in d:
+            # None = compte inconnu (l'ancien format ne l'enregistrait pas) ;
+            # la validation par l'offset le remplace.
+            self.faits = {('T', k): None for k in range(int(d['fait']))}
+            # L'ancien format ecrivait dans l'ordre et garantissait que tout
+            # ce qui precede `offset` appartient a une tache terminee. On
+            # tronque donc la, comme le faisait la version sequentielle ;
+            # au-dela il ne peut y avoir que les restes d'une tache
+            # interrompue.
+            self.offset_herite = int(d.get('offset', 0))
+            return True, (f"reprise d'un checkpoint sequentiel : "
+                          f"{int(d['fait'])} taches")
+        return False, "checkpoint sans lots ni compteur"
 
-    def sauver(self, fait, offset, compteurs):
-        self.fait, self.offset = fait, offset
+    def sauver(self, compteurs):
         self.compteurs = dict(compteurs)
         tmp = self.chemin + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump({'empreinte': self.empreinte, 'fait': fait,
-                       'offset': offset, 'compteurs': self.compteurs}, f)
+            json.dump({'empreinte': self.empreinte,
+                       'lots': [[list(k), v]
+                                for k, v in sorted(self.faits.items())],
+                       'compteurs': self.compteurs}, f)
         os.replace(tmp, self.chemin)   # remplacement atomique
 
 
@@ -465,6 +508,87 @@ def _echantillon_controle(taches, n, graine=0):
     return sortie
 
 
+
+# ======================================================================
+# Parallelisme : un LOT = (tache, tranche de realisations de symetrie)
+# ======================================================================
+#
+# POURQUOI PAS « UNE TACHE = UN LOT »
+# -----------------------------------
+# Une tache, ce n'est pas un calcul : c'est un candidat confronte a TOUTES
+# les realisations que Braun donne de son groupe. #480 en a 368 pour
+# Z2 x Z2 -- mesure : 24,1 s chacune, soit 2 h 28 pour la seule tache 823.
+# Prendre la tache comme unite laisserait un worker occupe deux heures et
+# demie pendant que les autres finissent, et surtout ne permettrait pas de
+# sauvegarder au milieu. On decoupe donc en TRANCHES de realisations.
+#
+# Consequences, toutes voulues :
+#   - repartition : les grosses taches se repartissent sur les workers ;
+#   - checkpoint : la granularite descend de 2 h 28 a quelques minutes ;
+#   - affichage : chaque lot rendu produit ses lignes, donc l'ecran vit.
+#
+# Mesure sur la machine de reference : 12 % de CPU sur 8 coeurs, autrement
+# dit UN seul coeur occupe. `main_optimized` distribue depuis toujours ;
+# ce script-ci ne l'avait jamais fait, parce qu'il tournait en une heure
+# sur 108 candidats. Sur 3 698 taches, cet oubli vaut un facteur 7.
+
+_CTX = {}
+
+
+def _init_worker(braun_m, cicylist):
+    """Charge une fois par worker ce qui est lourd et immuable.
+
+    Sous Windows (methode `spawn`), rien n'est herite du parent : chaque
+    worker relit les 7 890 CICYs et les symetries de Braun. ~4 s une fois,
+    contre autant par tache si on le refaisait a chaque lot.
+    """
+    global _CTX
+    entries = {e['num']: e for e in load_oxford_file(cicylist)}
+    braun = parse_braun(braun_m)
+    cl = parse_cicylist(cicylist)
+    corr, _, _ = apparier(braun, cl)
+    _CTX = {'entries': entries,
+            'inv': {v: k for k, v in corr.items()},
+            'SYM': parse_symmetries(braun_m)}
+
+
+def _travail(item):
+    """Evalue une tranche de realisations. Rend (id_lot, lignes).
+
+    Les exceptions sont capturees et renvoyees comme une ligne d'etat : un
+    worker qui meurt en silence ferait disparaitre un candidat sans laisser
+    de trace -- le defaut du §5.23, sous une autre forme.
+    """
+    id_lot, cicy, b, c, groupes, idx_sym, premier = item
+    try:
+        e = _CTX['entries'].get(cicy)
+        num_b = _CTX['inv'].get(cicy)
+        if e is None or num_b not in _CTX['SYM']:
+            return id_lot, []
+        amb, cfg = e['ambient'], np.asarray(e['config'])
+        if idx_sym is None:
+            # Aucun groupe d'ordre compatible avec l'indice : le candidat
+            # est ECARTE sans calcul, et la raison persistee. Ce cas est
+            # decide en amont, AVANT le test de domaine -- l'inverse
+            # etiquetterait « hors domaine » des candidats qui n'ont
+            # simplement pas de Gamma utilisable (18 cas sur le lot de
+            # #6947 lors du premier essai).
+            return id_lot, [{'groupe': '-',
+                             'etat': 'aucun groupe d ordre compatible avec '
+                                     'l indice (|chi| != 3.|Gamma|)'}]
+        if not domaine_valide(amb, cfg, b, c, rank_c_max=None):
+            # Une seule fois par tache, pas une fois par tranche.
+            return id_lot, ([{'groupe': '-',
+                              'etat': 'hors domaine (modele S/I non valide)'}]
+                            if premier else [])
+        syms = [_CTX['SYM'][num_b]['symetries'][i] for i in idx_sym]
+        return id_lot, analyser(cicy, amb, cfg, b, c, syms,
+                                groupes=set(groupes) if groupes else None)
+    except Exception as exc:
+        return id_lot, [{'groupe': '-',
+                         'etat': f'erreur worker ({type(exc).__name__}: {exc})'}]
+
+
 def _sortie_tolerante():
     """
     Empeche un plantage d'encodage sur une console Windows.
@@ -497,8 +621,22 @@ def main():
                          "avec l'indice (champ groupes_utiles).")
     ap.add_argument('--reset', action='store_true',
                     help="Ignorer le checkpoint et repartir de zero.")
+    ap.add_argument('-j', '--jobs', type=int, default=None,
+                    help="Nombre de workers. Defaut : nombre de coeurs - 1. "
+                         "Ce script etait mono-coeur jusqu'ici, alors que "
+                         "`main_optimized` distribue depuis toujours : sur "
+                         "une machine a 8 coeurs, cet oubli valait un "
+                         "facteur 7. 1 = sequentiel (utile pour deboguer).")
+    ap.add_argument('--taille-lot', type=int, default=16,
+                    help="Nombre de realisations de symetrie par lot. C'est "
+                         "la granularite du checkpoint ET de l'affichage. "
+                         "#480 a 368 realisations pour un seul candidat, a "
+                         "24 s chacune : sans decoupage, un worker resterait "
+                         "2 h 28 sans rien rendre ni rien sauvegarder. "
+                         "Change les identifiants de lot, donc invalide un "
+                         "checkpoint pris avec une autre valeur.")
     ap.add_argument('--arret-apres', type=int, default=0,
-                    help="S'arreter proprement apres N taches, comme le "
+                    help="S'arreter proprement apres N lots, comme le "
                          "ferait une interruption. Sert aux tests : une "
                          "coupure provoquee par un chronometre tombe presque "
                          "toujours ENTRE deux candidats, et la reprise n'est "
@@ -539,9 +677,12 @@ def main():
 
     # ---------------- checkpoint ------------------------------------
     dst = os.path.join(args.output_dir, 'results_equivariance_f.jsonl')
-    prog = Progression(args.output_dir,
-                       _empreinte(src, (args.cicy, bool(args.replier_orbites),
-                                        int(args.controle_orbites))))
+    prog = Progression(
+        args.output_dir,
+        _empreinte(src, (args.cicy, bool(args.replier_orbites),
+                         int(args.controle_orbites), int(args.taille_lot))),
+        _empreinte(src, (args.cicy, bool(args.replier_orbites),
+                         int(args.controle_orbites))))
     depart = 0
     survivants = indetermines = ecartes = 0
 
@@ -554,15 +695,77 @@ def main():
         taille = os.path.getsize(dst) if os.path.exists(dst) else 0
         ok, motif = prog.charger(taille)
         if ok:
-            depart = prog.fait
             survivants = prog.compteurs['survivants']
             indetermines = prog.compteurs['indetermines']
             ecartes = prog.compteurs['ecartes']
-            # Tronque ce qu'un candidat interrompu a pu laisser derriere lui.
-            with open(dst, 'r+b') as fh:
-                fh.truncate(prog.offset)
-            print(f"\n  Reprise : {depart} / {len(taches)} taches deja "
-                  f"traitees ({100.0 * depart / max(1, len(taches)):.1f} %)")
+            # FILTRAGE plutot que troncature : avec plusieurs workers les
+            # lots ne finissent pas dans l'ordre, donc « tout ce qui est
+            # avant l'offset est valide » est faux. Chaque ligne porte son
+            # `_lot` ; on ne garde que celles des lots valides, ce qui
+            # elimine aussi les lignes d'un lot ecrit a moitie.
+            if prog.offset_herite is not None and taille:
+                with open(dst, 'r+b') as fh:
+                    fh.truncate(prog.offset_herite)
+                taille = prog.offset_herite
+            # LE FICHIER FAIT FOI, en DEUX passes.
+            #
+            # Un seul parcours ne suffit pas : il faudrait connaitre le
+            # compte de lignes de chaque lot AVANT de decider si on le
+            # garde. Filtrer d'abord, restreindre ensuite, laissait dans le
+            # fichier les lignes d'un lot a moitie ecrit tout en le
+            # recalculant -- donc en double. Constate : 41 lignes la ou le
+            # run d'un trait en donne 40.
+            #
+            # Passe 1 : compter par lot. Passe 2 : ne reecrire que les lots
+            # dont le compte correspond exactement au checkpoint.
+            n_avant = n_apres = 0
+            vus = {}
+            if taille:
+                with open(dst, encoding='utf-8') as f:
+                    for ligne in f:
+                        if not ligne.strip():
+                            continue
+                        n_avant += 1
+                        try:
+                            lot = json.loads(ligne).get('_lot')
+                        except json.JSONDecodeError:
+                            continue
+                        if lot is not None:
+                            k_ = tuple(lot)
+                            vus[k_] = vus.get(k_, 0) + 1
+            avant_restriction = len(prog.faits)
+            prog.faits = {
+                f: n for f, n in prog.faits.items()
+                if len(f) == 2                       # herite du sequentiel
+                or (f[0] == 'T' and vus.get(f, 0) == n)}
+            if len(prog.faits) != avant_restriction:
+                print(f"  Checkpoint restreint : {avant_restriction} -> "
+                      f"{len(prog.faits)} lots (lignes absentes ou "
+                      f"incompletes dans le JSONL, ou lots de controle "
+                      f"-- tous seront recalcules)")
+            if taille:
+                tmp = dst + '.filtre'
+                with open(dst, encoding='utf-8') as src_f, \
+                        open(tmp, 'w', encoding='utf-8') as out_f:
+                    for ligne in src_f:
+                        if not ligne.strip():
+                            continue
+                        try:
+                            lot = json.loads(ligne).get('_lot')
+                        except json.JSONDecodeError:
+                            continue          # ligne tronquee par une coupure
+                        # Les lignes d'un checkpoint SEQUENTIEL n'ont pas de
+                        # `_lot` : l'ancien format ecrivait dans l'ordre et
+                        # a deja ete tronque a son offset ci-dessus.
+                        if lot is None or tuple(lot) in prog.faits:
+                            out_f.write(ligne)
+                            n_apres += 1
+                os.replace(tmp, dst)
+            print(f"\n  Reprise : {motif}")
+            if n_avant != n_apres:
+                print(f"  JSONL filtre : {n_avant} lignes -> {n_apres} "
+                      f"({n_avant - n_apres} appartenaient a des lots non "
+                      f"termines)")
         elif os.path.exists(prog.chemin) or taille:
             # Un checkpoint existait mais n'est pas utilisable : le DIRE.
             # Repartir de zero en silence ferait passer un recommencement
@@ -680,9 +883,7 @@ def main():
             lignes_out.append({**ident, **L})
         return lignes_out, d_surv, d_ind, d_ec
 
-    # ---------------- boucle avec checkpoint -------------------------
-    # 'a' et non 'w' : la reprise a deja tronque le fichier a l'offset du
-    # dernier candidat complet, donc ouvrir en ecriture l'effacerait.
+    # ---------------- lots, pool, ecriture ---------------------------
     interrompu = False
     controles = _echantillon_controle(taches, args.controle_orbites)
     n_controles = n_discordances = 0
@@ -691,75 +892,233 @@ def main():
         # Ce qui doit coincider sur une orbite : le verdict, pas les
         # charges ni le degre temoin -- ceux-la sont PERMUTES par
         # l'automorphisme et differeraient legitimement.
-        return (str(x.get('groupe')), str(x.get('lambda')),
+        #
+        # `_norm` n'est pas cosmetique. Le representant est RELU depuis le
+        # JSONL (ou un tuple est devenu une liste) tandis que le membre de
+        # controle est encore en memoire : `str((1, 1))` != `str([1, 1])`,
+        # et les 18 controles rendaient 12 discordances entierement
+        # fictives. Une garde qui crie a tort est aussi inutile qu'une
+        # garde muette.
+        def _norm(v):
+            if isinstance(v, (list, tuple)):
+                return tuple(_norm(u) for u in v)
+            return v
+        return (str(x.get('groupe')), str(_norm(x.get('lambda'))),
                 bool(x.get('survit')), str(x.get('etat')),
                 str(x.get('n_gen_quotient')))
 
-    with open(dst, 'a', encoding='utf-8') as fh:
-        for k, (i_rep, membres) in enumerate(taches):
-            if k < depart:
-                continue
-            if args.arret_apres and (k - depart) >= args.arret_apres:
-                interrompu = True
-                break
-            try:
-                bloc, ds, di, de = traiter(rs[i_rep])
-                # --- controle du repli ---------------------------------
-                for j in controles.get(k, ()):
-                    bloc_j, _, _, _ = traiter(rs[j])
-                    n_controles += 1
-                    a = sorted(map(_cle_verdict, bloc))
-                    b_ = sorted(map(_cle_verdict, bloc_j))
-                    if a != b_:
-                        n_discordances += 1
-                        print(f"  !! DISCORDANCE D'ORBITE sur "
-                              f"#{rs[i_rep]['cicy']} : le membre de controle "
-                              f"ne donne pas le meme verdict que le "
-                              f"representant.")
-                        print(f"     representant : {a[:2]}")
-                        print(f"     membre       : {b_[:2]}")
-            except KeyboardInterrupt:
-                interrompu = True
-                break
+    # --- construction des lots ---------------------------------------
+    # Un lot = ('T', tache, rang de la tranche) pour un representant,
+    #          ('C', tache, membre, rang) pour un controle.
+    # L'identifiant est STABLE d'un lancement a l'autre : c'est lui qui
+    # permet a la reprise de savoir ce qui est deja fait, quel que soit
+    # l'ordre dans lequel les workers ont rendu.
+    lots = []
+    for k, (i_rep, membres) in enumerate(taches):
+        r = rs[i_rep]
+        num_b = inv.get(r['cicy'])
+        if entries.get(r['cicy']) is None or num_b not in SYM:
+            continue
+        g = None if args.tous_groupes else set(r.get('groupes_utiles') or [])
+        if g is not None and not g:
+            # « aucun groupe d'ordre compatible » : pas de calcul, mais une
+            # ligne quand meme -- un fichier doit dire pourquoi un cas n'a
+            # pas ete traite.
+            lots.append((('T', k, -1), r['cicy'], r['b_charges'],
+                         r['c_charges'], None, None, True))
+            continue
+        idx = [n for n, sy in enumerate(SYM[num_b]['symetries'])
+               if (not g) or sy['nom'] in g]
+        tranches = [idx[t:t + args.taille_lot]
+                    for t in range(0, len(idx), args.taille_lot)] or [[]]
+        for t, tr in enumerate(tranches):
+            lots.append((('T', k, t), r['cicy'], r['b_charges'],
+                         r['c_charges'], sorted(g) if g else None, tr, t == 0))
+        for j in controles.get(k, ()):
+            rj = rs[j]
+            for t, tr in enumerate(tranches):
+                lots.append((('C', k, j, t), rj['cicy'], rj['b_charges'],
+                             rj['c_charges'], sorted(g) if g else None,
+                             tr, t == 0))
 
-            # --- ecriture : une ligne par MEMBRE, jamais une de moins ---
-            for j in membres:
-                replique = (j != i_rep)
-                ident_j = {c: rs[j].get(c) for c in
-                           ('cicy', 'gauge', 'rank_V', 'cohomology',
-                            'b_charges', 'c_charges', 'groupes_utiles',
-                            'equivariant_possible', 'ordres_gamma')}
-                for x in bloc:
-                    y = dict(x)
-                    if replique:
-                        # Charges du membre, verdict du representant. Le
-                        # degre temoin, lui, reste celui du representant :
-                        # il est permute par l'automorphisme, et le
-                        # recopier tel quel serait faux -- on le marque.
-                        y.update(ident_j)
-                        y['verdict_replique'] = True
-                        y['representant'] = rs[i_rep].get('b_charges')
-                    else:
-                        y['verdict_replique'] = False
-                    fh.write(json.dumps(y, default=int) + '\n')
+    # `('T', k)` sans rang de tranche = tache entiere d'un checkpoint
+    # sequentiel migre : tous ses lots sont consideres faits.
+    a_faire = [x for x in lots
+               if x[0] not in prog.faits and ('T', x[0][1]) not in prog.faits]
+    print(f"\n  {len(lots)} lots (tranches de {args.taille_lot} realisations), "
+          f"{len(lots) - len(a_faire)} deja faits, {len(a_faire)} a traiter")
+    # `--arret-apres` simule une interruption : le run doit se terminer
+    # comme s'il avait ete coupe, INTERROMPU compris, sinon un test de
+    # reprise ne saurait pas qu'il vient d'etre coupe.
+    tronque_volontairement = False
+    if args.arret_apres and len(a_faire) > args.arret_apres:
+        a_faire = a_faire[:args.arret_apres]
+        tronque_volontairement = True
+        print(f"  --arret-apres : on s'arretera apres {len(a_faire)} lots")
+
+    # --- execution ----------------------------------------------------
+    n_jobs = args.jobs if args.jobs else max(1, (os.cpu_count() or 2) - 1)
+    resultats_ctrl = {}
+    t0 = time.time()
+    n_faits = 0
+
+    def _ecrire(fh, id_lot, lignes):
+        """Ecrit les lignes d'un lot, repliquees sur les membres. Rend leur nombre."""
+        nonlocal survivants, indetermines, ecartes
+        n_ecrites = 0
+        k = id_lot[1]
+        i_rep, membres = taches[k]
+        for L in lignes:
+            if L.get('etat') != 'ok':
+                ecartes += len(membres)
+            else:
+                survivants += bool(L.get('survit')) * len(membres)
+                indetermines += bool(L.get('indetermine')) * len(membres)
+                L['n_gen_quotient'] = n_gen_quotient(
+                    rs[i_rep].get('cohomology'), L.get('groupe'))
+        for j in membres:
+            replique = (j != i_rep)
+            ident_j = {c: rs[j].get(c) for c in
+                       ('cicy', 'gauge', 'rank_V', 'cohomology',
+                        'b_charges', 'c_charges', 'groupes_utiles',
+                        'equivariant_possible', 'ordres_gamma')}
+            for x in lignes:
+                y = dict(x)
+                y.update(ident_j)
+                # Charges du membre, verdict du representant. Le degre
+                # temoin reste celui du representant : il est permute par
+                # l'automorphisme -- d'ou le marquage.
+                y['verdict_replique'] = bool(replique)
                 if replique:
-                    survivants += ds
-                    indetermines += di
-                    ecartes += de
-            survivants += ds
-            indetermines += di
-            ecartes += de
-            # L'ordre compte : vider le tampon, forcer l'ecriture disque,
-            # PUIS enregistrer l'offset. L'inverse laisserait un checkpoint
-            # pointant au-dela de ce qui est reellement sur le disque.
-            fh.flush()
-            os.fsync(fh.fileno())
-            prog.sauver(k + 1, fh.tell(),
-                        {'survivants': survivants,
-                         'indetermines': indetermines, 'ecartes': ecartes})
+                    y['representant'] = rs[i_rep].get('b_charges')
+                y['_lot'] = list(id_lot)
+                if x.get('etat') != 'ok':
+                    y.setdefault('survit', False)
+                    y.setdefault('indetermine', True)
+                fh.write(json.dumps(y, default=int) + '\n')
+                n_ecrites += 1
+        return n_ecrites
 
+    def _afficher(cicy, gauge, lignes):
+        for L in lignes:
+            if L.get('etat') != 'ok':
+                print(f"  {cicy:>5} {gauge:>7} {L.get('groupe', '-'):<11} "
+                      f"{L.get('etat')}")
+                continue
+            if L['survit']:
+                ng = L.get('n_gen_quotient')
+                v = (f"SURVIT -- {ng if ng is not None else '?'} gen sur "
+                     f"X/Gamma (Hoppe complet + surjectif en "
+                     f"{L['surjectif_degre']})")
+            elif L.get('hoppe_complet') is False:
+                v = f"tue par Hoppe complet : {L.get('hoppe_valeurs')}"
+            elif L.get('hoppe_complet') is None and L.get('indetermine') \
+                    and L.get('surjectif_certifie') is None:
+                v = "indetermine : Hoppe complet non calculable"
+            elif L.get('surjectif_certifie') is False:
+                v = "indetermine : surjectivite de f non certifiee"
+            elif L.get('indetermine'):
+                v = "indetermine (w2V non calculable)"
+            elif L['h0_generique'] != 0:
+                v = "deja non stable avec f generique"
+            elif L['h0_equivariant'] != 0:
+                v = "tue par h0(V) equivariant"
+            elif L.get('h0w2_generique'):
+                v = "deja non stable : h0(w2V) generique != 0"
+            else:
+                v = "tue par h0(w2V) equivariant"
+            f_ = lambda x: '-' if x is None else str(x)
+            print(f"  {cicy:>5} {gauge:>7} {L['rang_V']:>2} "
+                  f"{L['groupe']:<11} {str(L['lambda']):>14} "
+                  f"{L['dim_equivariant']:>6} {L['dim_totale']:>5} "
+                  f"{L['h0_generique']:>6} {L['h0_equivariant']:>5} "
+                  f"{f_(L['h0w2_generique']):>6} "
+                  f"{f_(L['h0w2_equivariant']):>5}  {v}")
+
+    print(f"  {n_jobs} worker(s)\n")
+    with open(dst, 'a', encoding='utf-8') as fh:
+        if n_jobs <= 1 or not a_faire:
+            _init_worker(args.braun_m, args.cicylist)
+            flux = ((it[0], _travail(it)[1]) for it in a_faire)
+            pool = None
+        else:
+            pool = mp.Pool(n_jobs, initializer=_init_worker,
+                           initargs=(args.braun_m, args.cicylist))
+            flux = pool.imap_unordered(_travail, a_faire)
+        try:
+            for id_lot, lignes in flux:
+                if id_lot[0] == 'C':
+                    # `n_gen_quotient` est calcule dans `_ecrire` pour les
+                    # lignes du representant ; il faut le calculer AUSSI
+                    # ici, sinon la comparaison oppose une valeur a None et
+                    # declare une discordance a chaque controle. Premier
+                    # essai : 12 discordances sur 18, toutes fictives.
+                    coh = rs[id_lot[2]].get('cohomology')
+                    for L in lignes:
+                        if L.get('etat') == 'ok':
+                            L['n_gen_quotient'] = n_gen_quotient(
+                                coh, L.get('groupe'))
+                    resultats_ctrl.setdefault((id_lot[1], id_lot[2]),
+                                              []).extend(lignes)
+                    n_lignes_ecrites = 0
+                else:
+                    k = id_lot[1]
+                    _afficher(rs[taches[k][0]]['cicy'],
+                              rs[taches[k][0]].get('gauge', ''), lignes)
+                    n_lignes_ecrites = _ecrire(fh, id_lot, lignes)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                prog.faits[id_lot] = n_lignes_ecrites
+                prog.sauver({'survivants': survivants,
+                             'indetermines': indetermines,
+                             'ecartes': ecartes})
+                n_faits += 1
+                if n_faits % 25 == 0:
+                    ec = time.time() - t0
+                    reste = (len(a_faire) - n_faits) * ec / n_faits
+                    print(f"    [{n_faits}/{len(a_faire)} lots, {ec/60:.0f} min "
+                          f"ecoulees, ~{reste/3600:.1f} h restantes]")
+        except KeyboardInterrupt:
+            interrompu = True
+            if pool is not None:
+                pool.terminate()
+        finally:
+            if pool is not None:
+                pool.close()
+                pool.join()
+
+    # --- controle du repli, une fois les lots rassembles ---------------
+    n_controles = len(resultats_ctrl)
+    if resultats_ctrl:
+        # Le representant a ete ecrit ligne par ligne ; on relit ses lignes
+        # depuis le JSONL plutot que de les garder en memoire, ce qui
+        # marcherait mal sur un lot de 47 Mo.
+        par_tache = {}
+        with open(dst, encoding='utf-8') as f:
+            for ligne in f:
+                if not ligne.strip():
+                    continue
+                x = json.loads(ligne)
+                lot = x.get('_lot')
+                if not lot or lot[0] != 'T' or x.get('verdict_replique'):
+                    continue
+                par_tache.setdefault(lot[1], []).append(x)
+        n_discordances = 0
+        for (k, j), bloc_j in resultats_ctrl.items():
+            a = sorted(map(_cle_verdict, par_tache.get(k, [])))
+            b_ = sorted(map(_cle_verdict, bloc_j))
+            if a and a != b_:
+                n_discordances += 1
+                print(f"  !! DISCORDANCE D'ORBITE sur "
+                      f"#{rs[taches[k][0]]['cicy']} : le membre de controle "
+                      f"ne donne pas le meme verdict que le representant.")
+                print(f"     representant : {a[:2]}")
+                print(f"     membre       : {b_[:2]}")
+
+    interrompu = interrompu or tronque_volontairement
     if interrompu:
-        print(f"\n  INTERROMPU apres {prog.fait} / {len(taches)} taches.")
+        print(f"\n  INTERROMPU apres {n_faits} / {len(a_faire)} lots de cette "
+              f"session ({len(prog.faits)} lots faits au total).")
         print(f"  Relancer la meme commande reprend a cet endroit.")
     if rapport_orbites:
         print(f"\n  Repli par orbite : {rapport_orbites['candidats']} candidats "
@@ -769,6 +1128,7 @@ def main():
               f"symetrie de configuration : rien n'y est replie.")
         print(f"    Controle : {n_controles} membres non representants "
               f"reevalues pour de vrai, {n_discordances} discordance(s).")
+        print(f"    Lots : {len(prog.faits)} termines sur {len(lots)}.")
         if n_discordances:
             print(f"    /!\\ Le repli est INVALIDE sur ce lot. Relancer sans "
                   f"--replier-orbites.")

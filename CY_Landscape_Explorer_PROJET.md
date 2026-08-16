@@ -1718,6 +1718,77 @@ elles :
 
 ---
 
+### 5.27 Les huit candidats à ℤ₂×ℤ₂ : ce sont les seuls qui survivent, et c'est le problème
+
+Le balayage complet donne **33 099 lignes `SURVIT` → 2 857 candidats (B, C)
+distincts → 691 orbites** sur **91 CICYs**, toutes SO(10) rang 4, toutes à
+3 générations sur le quotient. Intégrité vérifiée : **zéro** ligne où `survit`
+serait vrai sans que h⁰ générique, h⁰ équivariant, Hoppe complet et la
+surjectivité soient tous passés. Les trois candidats connus retombent où ils
+doivent : #6890 → 12 orbites (|Aut| = 1), #6947 → 1 (|Aut| = 24), #6715 → 3.
+
+683 de ces orbites ont Γ = ℤ₂ et butent sur l'argument de rang du §5.8. Seules
+**huit**, sur sept CICYs (#22, #480, #2357 ×2, #2534, #2568, #5421, #6829), ont
+Γ = ℤ₂×ℤ₂ — donc deux lignes de Wilson, donc la seule route vers le rang 4.
+
+**Elles sont toutes obstruées.** Les deux générateurs **anticommutent** sur
+H¹(V) :
+
+```
+  #  22 : ordres projectifs (2,2) constantes (1,1)   AB = k.BA,  k = -1
+  # 480 : ...                                        k = -1
+  (les huit, sans exception)
+```
+
+Le relèvement de ℤ₂×ℤ₂ au fibré est une représentation **projective** de cocycle
+non trivial. Rééchelonner les générateurs ne le supprime pas : le rapport k est
+invariant. H¹(V) = 12 ne se décompose donc pas en 3+3+3+3 ; il porte des
+irréductibles de dimension 2 de l'extension centrale. **Le comptage
+n_gen = |χ|/|Γ| = 3 n'est pas établi pour ces huit.**
+
+**La règle, mesurée** sur trois CICYs et onze degrés chacune : le cocycle vaut
+**(−1)^|a|** — la parité du degré total.
+
+| \|a\| | k |
+|---|---|
+| 1 | −1 |
+| 2 | +1 |
+| 5 (#6829) | −1 |
+| 6 (#2534) | +1 |
+
+Or les huit ont tous **\|c\| = 5**, et ce n'est pas un hasard : B est une somme
+de **cinq** vecteurs unité, donc \|c₁(B)\| = 5, impair, structurellement.
+
+**Et voici ce qui condamne l'interprétation.** Dans le catalogue, parmi les
+candidats dont ℤ₂×ℤ₂ est un groupe utile et que le pipeline sait certifier
+(rank_C = 1) :
+
+| | nombre | survivants |
+|---|---|---|
+| \|c\| **pair** — non obstrués | **2 338** | **0** |
+| \|c\| **impair** — obstrués | **14** | **8** |
+
+Zéro survivant sur 2 338 candidats physiquement admissibles ; huit sur les
+quatorze qui ne le sont pas. **La survie est anti-corrélée avec l'admissibilité.**
+Ces huit ne survivent pas malgré le cocycle : tout indique qu'ils survivent
+**à cause** de lui — l'espace « équivariant » calculé dans le cas projectif
+n'est pas celui d'une structure équivariante véritable, et y annuler h⁰(V) ne
+démontre pas ce qu'on croit.
+
+C'est le §5.3 sous une autre forme : un sous-espace équivariant qui n'est pas
+celui qu'on croit, et un test qui passe pour cette raison.
+
+**Je retire donc l'annonce faite dans la foulée du scan** — « huit candidats qui
+échappent à l'argument de rang ». Ce sont les huit que la machinerie traite mal.
+
+**Ce que cela ouvre.** `decomposition_h1_V_abelien` (nouveau) traite un Γ abélien
+à plusieurs générateurs et **refuse de rendre des multiplicités** quand les
+générateurs ne commutent pas, au lieu de produire un tableau qui ne décrit rien.
+Et la vraie question devient : pourquoi aucun des 2 338 candidats non obstrués
+ne survit-il ? Là est le prochain chantier — pas dans les huit.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -1854,6 +1925,7 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | §5.18 | `groupes_utiles` vide ⇒ repli sur **tous** les groupes | 95,5 % des couples calculés hors cible, certains marqués `SURVIT` |
 | §5.25 | contrôle du repli tiré **par orbite** : une orbite géante n'en recevait qu'un | un repli entièrement faux validé par « 0 discordance » |
 | **§5.23** | **le générateur lui-même : 10 tirages sur une famille de 2 201** | **« ces fibrés n'existent pas sur ces CICYs »** — alors qu'ils n'avaient pas été engendrés |
+| **§5.27** | **l'espace « équivariant » d'un relèvement PROJECTIF** | **8 candidats à ℤ₂×ℤ₂** — les seuls survivants, et les seuls obstrués |
 
 La septième est la plus coûteuse : c'est un filtre qu'on n'avait pas identifié
 comme tel. Un générateur incomplet ne se distingue d'un résultat d'absence par

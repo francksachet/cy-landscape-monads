@@ -800,6 +800,140 @@ def multiplicites_propres(T, p, valeurs, base=None):
     return out
 
 
+def decomposition_h1_V_abelien(anneau, ambient, b_charges, c_charges,
+                               coord_mats, base, offsets, dims, degres, p, rng):
+    """
+    Decomposition de H^1(V) sous un Gamma ABELIEN a plusieurs generateurs.
+
+    ----------------------------------------------------------------------
+    Pourquoi cette fonction existe
+    ----------------------------------------------------------------------
+    `decomposition_h1_V` commence par `if len(coord_mats) != 1: return None`
+    -- elle ne traite que Gamma cyclique. Or les seuls candidats du scan
+    qui echappent a l'argument de rang du §5.8 sont ceux a Gamma = Z2 x Z2 :
+    |Gamma| = 4 donne DEUX lignes de Wilson, la ou une seule plafonne a
+    Pati-Salam. Sans cette extension, ce sont precisement les candidats
+    interessants dont le spectre reste inconnu.
+
+    ----------------------------------------------------------------------
+    Ce qui est calcule
+    ----------------------------------------------------------------------
+    Les generateurs agissent sur R_c par des operateurs T_g qui COMMUTENT
+    (a un scalaire pres) et sont d'ordre projectif fini. On decompose donc
+    R_c en sous-espaces propres SIMULTANES, un par caractere de Gamma, au
+    moyen des projecteurs
+
+        P_chi = prod_g ( sum_{k} chi(g)^{-k} T_g^k / n_g )
+
+    puis on soustrait les multiplicites de l'image de f. La difference est
+    la decomposition de H^1(V) = coker(H^0(B) -> H^0(C)).
+
+    ----------------------------------------------------------------------
+    Ce qui est VERIFIE plutot que suppose
+    ----------------------------------------------------------------------
+    - que les T_g commutent EXACTEMENT (et non a un scalaire pres) : sinon
+      la decomposition simultanee n'existe pas, et on rend `None` plutot
+      qu'un tableau de nombres sans signification ;
+    - que chaque T_g est d'ordre projectif fini, avec sa constante ;
+    - que la somme des multiplicites vaut la dimension -- sur R_c ET sur
+      l'image. C'est le controle de semi-simplicite, et c'est lui qui a
+      detecte le cocycle du relevement projectif sur (1,1,1).
+
+    Reference independante : Gamma agissant librement,
+    n_gen(X/Gamma) = |chi(V)| / |Gamma|. Avec h^1(V) = 12 et |Gamma| = 4,
+    la partie INVARIANTE doit valoir exactement 3. Une decomposition en
+    4+4+2+2 signalerait une erreur, pas une decouverte.
+    """
+    from cy_landscape.core.sections import _mult_matrix
+    if len(c_charges) != 1 or not coord_mats:
+        return None
+    c = list(c_charges[0])
+
+    # --- image de f dans R_c ------------------------------------------
+    v = (rng.randint(0, p, size=base.shape[0]) @ base) % p
+    blocs = []
+    for i, bb in enumerate(b_charges):
+        if (0, i) not in offsets:
+            blocs.append(np.zeros((anneau.dimY(c), anneau.dimY(list(bb))),
+                                  dtype=np.int64))
+            continue
+        deg = degres[0][i]
+        S, idx, free, piv, Mred = anneau.quotient(deg)
+        coeffs = np.zeros(len(S), dtype=np.int64)
+        for t, k in enumerate(free):
+            coeffs[k] = v[offsets[(0, i)] + t]
+        blocs.append(_mult_matrix(anneau, list(bb), deg, (S, coeffs), c))
+    Mf = np.hstack(blocs) % p
+    W, pivW = rref_complet(Mf.T.copy(), p)
+    dimC = anneau.dimY(c)
+    h1 = dimC - W.shape[0]
+
+    # --- operateurs des generateurs sur R_c ---------------------------
+    Ts, ordres, consts = [], [], []
+    for M in coord_mats:
+        sigma = permutation_facteurs_numerique(M, ambient, p)
+        T, deg_img = matrice_quotient(anneau, M, ambient, sigma, c, p)
+        if list(deg_img) != c:
+            return None
+        n, cst = ordre_projectif(T, p)
+        if n is None:
+            return None
+        Ts.append(np.asarray(T, dtype=np.int64) % p)
+        ordres.append(n)
+        consts.append(cst)
+
+    # Commutation EXACTE. A un scalaire pres ne suffit pas : un cocycle non
+    # trivial interdit la diagonalisation simultanee, et rendre malgre tout
+    # des multiplicites donnerait des nombres qui ne decrivent rien.
+    for a in range(len(Ts)):
+        for b_ in range(a + 1, len(Ts)):
+            if not np.array_equal((Ts[a] @ Ts[b_]) % p, (Ts[b_] @ Ts[a]) % p):
+                return {'h1': h1, 'coherent': False,
+                        'motif': 'les generateurs ne commutent pas sur R_c '
+                                 '(cocycle du relevement projectif)'}
+
+    # --- projecteurs simultanes ---------------------------------------
+    valeurs = [racines_niemes(cst, n, p) for cst, n in zip(consts, ordres)]
+    if any(not v_ for v_ in valeurs):
+        return None
+    dim = dimC
+    I = np.eye(dim, dtype=np.int64)
+
+    def projecteur(T, n, lam):
+        """(1/n) sum_k lam^-k T^k -- projecteur sur le sous-espace propre."""
+        inv_lam = pow(int(lam), -1, p)
+        P = np.zeros((dim, dim), dtype=np.int64)
+        A = I.copy()
+        for k in range(n):
+            P = (P + pow(inv_lam, k, p) * A) % p
+            A = (A @ T) % p
+        return (P * pow(n, -1, p)) % p
+
+    import itertools as _it
+    sur_Rc, sur_W = {}, {}
+    for combo in _it.product(*valeurs):
+        P = I.copy()
+        for T, n, lam in zip(Ts, ordres, combo):
+            P = (P @ projecteur(T, n, lam)) % p
+        R, _ = rref_complet(P.T.copy(), p)
+        sur_Rc[combo] = R.shape[0]
+        if W.shape[0]:
+            RW, _ = rref_complet((W @ P.T) % p, p)
+            sur_W[combo] = RW.shape[0]
+        else:
+            sur_W[combo] = 0
+
+    coherent = (sum(sur_Rc.values()) == dimC
+                and sum(sur_W.values()) == W.shape[0])
+    return {
+        'h1': h1,
+        'ordres': ordres, 'constantes': consts,
+        'sur_Rc': sur_Rc, 'sur_image': sur_W,
+        'sur_H1': {k: sur_Rc[k] - sur_W[k] for k in sur_Rc},
+        'coherent': coherent,
+    }
+
+
 def decomposition_h1_V(anneau, ambient, b_charges, c_charges, coord_mats,
                        base, offsets, dims, degres, p, rng, valeurs=None):
     """

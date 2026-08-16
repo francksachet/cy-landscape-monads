@@ -47,7 +47,25 @@ import json
 import time
 import argparse
 import hashlib
+import threading
 import multiprocessing as mp
+
+# UN SEUL FIL PAR PROCESSUS POUR L'ALGEBRE LINEAIRE.
+#
+# A placer AVANT `import numpy` : OpenBLAS lit ces variables au chargement,
+# les changer ensuite n'a aucun effet. Avec `spawn` (Windows), chaque worker
+# reimporte ce module, donc chacun les applique aussi.
+#
+# Sans cela, OpenBLAS ouvre par defaut autant de fils qu'il y a de coeurs :
+# 7 workers x 8 fils = 56 fils pour 8 coeurs. Les matrices manipulees ici
+# font quelques dizaines de lignes -- le parallelisme BLAS n'y apporte rien
+# et le surabonnement coute beaucoup. Le parallelisme est pris au niveau des
+# PROCESSUS, pas des fils.
+#
+# `setdefault` : une valeur posee par l'utilisateur reste prioritaire.
+for _v in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS',
+           'NUMEXPR_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS'):
+    os.environ.setdefault(_v, '1')
 
 import numpy as np
 
@@ -635,6 +653,10 @@ def main():
                          "2 h 28 sans rien rendre ni rien sauvegarder. "
                          "Change les identifiants de lot, donc invalide un "
                          "checkpoint pris avec une autre valeur.")
+    ap.add_argument('--heartbeat', type=int, default=60,
+                    help="Signal de vie toutes les N secondes. 0 = aucun. "
+                         "Un lot durant plusieurs minutes, sans ce signal "
+                         "rien ne distingue un calcul en cours d'un blocage.")
     ap.add_argument('--arret-apres', type=int, default=0,
                     help="S'arreter proprement apres N lots, comme le "
                          "ferait une interruption. Sert aux tests : une "
@@ -1035,7 +1057,28 @@ def main():
                   f"{f_(L['h0w2_generique']):>6} "
                   f"{f_(L['h0w2_equivariant']):>5}  {v}")
 
-    print(f"  {n_jobs} worker(s)\n")
+    print(f"  {n_jobs} worker(s), BLAS a "
+          f"{os.environ.get('OMP_NUM_THREADS')} fil par processus\n")
+
+    # SIGNAL DE VIE. Un lot dure quelques minutes ; sans cela, l'ecran reste
+    # muet et rien ne distingue « ca calcule » de « c'est bloque ». C'est
+    # exactement ce qui a fait perdre une journee : plusieurs heures a
+    # regarder un terminal vide sans savoir quoi en conclure.
+    _stop = threading.Event()
+
+    def _battement():
+        while not _stop.wait(args.heartbeat):
+            ec = time.time() - t0
+            if n_faits:
+                reste = (len(a_faire) - n_faits) * ec / n_faits
+                print(f"    ... {n_faits}/{len(a_faire)} lots, {ec/60:.0f} min, "
+                      f"~{reste/3600:.1f} h restantes", flush=True)
+            else:
+                print(f"    ... aucun lot rendu apres {ec/60:.0f} min "
+                      f"(les lots de #480 durent quelques minutes)", flush=True)
+
+    if args.heartbeat > 0:
+        threading.Thread(target=_battement, daemon=True).start()
     with open(dst, 'a', encoding='utf-8') as fh:
         if n_jobs <= 1 or not a_faire:
             _init_worker(args.braun_m, args.cicylist)
@@ -1116,6 +1159,7 @@ def main():
                 print(f"     membre       : {b_[:2]}")
 
     interrompu = interrompu or tronque_volontairement
+    _stop.set()
     if interrompu:
         print(f"\n  INTERROMPU apres {n_faits} / {len(a_faire)} lots de cette "
               f"session ({len(prog.faits)} lots faits au total).")

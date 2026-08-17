@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 40 tests.
+> non une propriété des candidats, et la suite compte 42 tests.
 
 ---
 
@@ -134,7 +134,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        40 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        42 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -2151,6 +2151,122 @@ reste donc à établir pour Γ non ℤ₂.
 **État net** : la stabilité de trois candidats ℤ₄ est acquise, leur contenu en
 générations ne l'est pas.
 
+> **Suite au §5.34 : ce diagnostic était bon, sa cause supposée était fausse.**
+> Ce n'était pas la convention λ. C'était `matrice_substitution`, fausse dès que
+> Γ permute deux facteurs projectifs. Les chiffres ci-dessus — 4+1+1+6 et
+> 3+2+2+5 — sont à jeter, et le tableau des bornes `ker A` / `ker D` avec eux :
+> il reposait sur des espaces équivariants calculés dans une base mélangée.
+
+---
+
+### 5.34 L'ordre des colonnes de `matrice_substitution` — le sol se dérobait
+
+**Le juge n'était pas le bon.** « La partie invariante doit valoir 3 » est une
+équation. Il y en a **quatre**.
+
+Twister la structure équivariante de V par un caractère χ ne change aucune classe
+de Chern sur le quotient : χ(X/Γ, V_χ) vaut −3 pour **tous** les χ. Et h⁰, h², h³
+étant nuls en haut, chacun de leurs sous-espaces propres l'est aussi. Donc
+**chaque caractère reçoit exactement |χ(V)|/|Γ| = 3** : la décomposition de H¹(V)
+doit être la **représentation régulière**, 3+3+3+3.
+
+Vue sous cet angle, la mesure du §5.33 ne dit plus « λ = −1 va, λ = +1 ne va
+pas ». Elle dit que **les deux sont faux** : ni {4,1,1,6} ni {3,2,2,5} n'est
+régulier, et multiplier par un scalaire ne fait que permuter les étiquettes. Le
+twist λ ne pouvait donc pas être la cause. Il fallait descendre.
+
+**Trois questions, dans l'ordre, et la troisième a répondu.**
+
+| question | attendu | mesuré (avant) |
+|---|---|---|
+| T_C·M_f = s·M_f·T_B pour un scalaire s ? | s = λ | **aucun s** |
+| l'image de f est-elle stable sous T_C ? | oui (conséquence) | **non** |
+| S_g(f·h) = S_g(f)·S_g(h) dans S ? | oui, c'est une substitution | **non** |
+
+La troisième est un morphisme d'anneaux. Elle ne peut pas être fausse — sauf si
+la matrice qu'on appelle S_g n'est pas S_g.
+
+**La cause, en une phrase.** `matrice_substitution` monte S_g par un produit de
+Kronecker, facteur **d'arrivée** par facteur d'arrivée :
+
+```python
+    for s in range(m):
+        r = sigma_inv[s]
+        A = np.kron(A, _action_bloc(..., r, s, degre[r], p))
+```
+
+Ses **lignes** sortent donc dans l'ordre de `basis_multi(deg_img)` — correct. Ses
+**colonnes** sortent dans l'ordre `(σ⁻¹(0), σ⁻¹(1), …)` des facteurs de départ,
+alors que `basis_multi(degre)` les indexe dans l'ordre `(0, 1, …)`. Les deux ne
+coïncident **que si σ est l'identité**.
+
+Correctif : une permutation de colonnes, `_reordonner_colonnes`, appliquée quand
+`ordre_src != range(m)`.
+
+**Pourquoi rien ne le signalait.** Le système restait cohérent *avec lui-même*.
+`resoudre_covariants` résolvait la covariance dans la base mélangée ;
+`verifier_descente` la vérifiait dans la même base mélangée et trouvait un écart
+exactement nul ; `espace_f_equivariant` rendait un sous-espace non vide de
+dimension plausible. Tout se recoupait. Rien ne se rattachait à l'action
+géométrique.
+
+C'est la **règle des filtres** dans sa forme la plus dure : le contrôle interne
+(`verifier_descente`) et l'objet contrôlé partageaient le même défaut, donc le
+contrôle ne pouvait pas le voir. Seule une référence **extérieure au module** —
+S_g est un morphisme d'anneaux, et l'indice impose la régulière — pouvait le
+faire tomber.
+
+**Après correctif, sur les trois candidats ℤ₄ dont le modèle est exact :**
+
+```
+#7745 [1,1,7]      sigma = [1,0,2]      #6947 [1,1,1,1,7]  sigma = [1,0,3,2,4]
+    lambda = +1, ±i, -1 :  h0 equivariant = 0,  h1(V) = 12
+    decomposition {+1: 3, i: 3, i3: 3, -1: 3}   -> INVARIANTE = 3
+```
+
+**Quatre valeurs de λ, quatre fois la représentation régulière, quatre fois
+3 générations.** T_C·M_f = λ·M_f·T_B est désormais exacte, l'image est stable, et
+l'invariant ne dépend plus du λ retenu. Les λ = ±i, que le code d'avant écartait
+sur un h⁰ équivariant de 8, passent maintenant comme les autres : cette
+élimination était un artefact.
+
+Au passage, la convention est **mesurée** et non plus supposée : f est un
+morphisme de (H⁰(B), T_B) vers (H⁰(C), λ⁻¹·T_C). C'est donc λ⁻¹·T_C qui agit sur
+le conoyau — `decomposition_h1_V` prend maintenant `lam` et lit la décomposition
+sur l'action honnête. (Ici la réponse est régulière, donc λ ne change rien ; il
+changera tout dès que la décomposition ne sera plus équilibrée, ∧²V par exemple.)
+
+Second correctif, mineur et de même famille : `_mult_matrix` accumulait modulo la
+constante `P = 32003` du module `sections`, non modulo le `p` de l'anneau. Sans
+effet ici — aucune collision de monômes dans une colonne — mais faux dès qu'il y
+en aurait une.
+
+**Rayon d'action, mesuré et non estimé.** Sur les 174 847 lignes de verdict du
+scan Wilson-4 :
+
+| | couples (CICY, groupe) | lignes | dont SURVIT |
+|---|---|---|---|
+| σ fixe chaque facteur — **intacts** | 102 | 173 623 | 32 886 |
+| σ **permute** — **à recalculer** | **27** | **1 224** | **213** |
+
+Les 27 couples touchés portent sur les CICYs #22, #261, #343, #1262, #1295,
+#1298, #1441, #1701, #2317, #2360, #2543, #2544, #3929, #4071, #4109, #5273,
+#5311, #5425, #5958, #6173, #6204, #6225, #6229, #6231, #6724, #6804, #7279.
+**0,6 % des SURVIT** sont concernés — dans les deux sens : un SURVIT peut être
+usurpé, un éliminé peut l'avoir été à tort.
+
+Le §5.6 (`#6890`, `#6947` en ℤ₂, 3+3) est intact : σ y est l'identité. C'est
+précisément pourquoi la référence ℤ₂ ne pouvait pas révéler le défaut.
+
+**Deux tests l'attachent** (41ᵉ et 42ᵉ) :
+
+- `t_substitution_morphisme` : P¹×P¹×P², σ = (01), S_g(f·h) = S_g(f)·S_g(h) sur
+  4 couples ; témoin σ = identité ; **et sabotage** — la version sans remise en
+  ordre des colonnes doit échouer sur les 4, sinon le test ne mord pas.
+- `t_h1_reguliere_z4` : sur `#7745` (le cas réel, σ = [1,0,2]), la covariance
+  matricielle exacte, la stabilité de l'image, et H¹(V) = 3 × régulière pour les
+  quatre λ — pas seulement « invariant = 3 ».
+
 ---
 
 ## 6. Ce qui reste faux ou absent
@@ -2177,6 +2293,8 @@ générations ne l'est pas.
 | Higgs E₆ en mode Wilson | **corrigé (§5.19)** : le 3 codé en dur est supprimé. Le compte avec ligne de Wilson demanderait la décomposition des 27 sous Γ, non calculée |
 | h^i hors certification | ~52 % des cas — d_r (r ≥ 2) ou ambiguïté de rang |
 | annulation d'anomalie | **corrigée (§5.21)** : branchée avec le préfiltre χ, pour les monades comme pour les extensions. Elle écartait **70 des 115** entrées du catalogue. Les deux candidats du §2 passent. Également en place dans `audit_results.py`, donc reproductible sur un catalogue déjà produit (§5.22). **Toujours absente** de `triage_clean.py` et `verify_hoppe.py`, qui travaillent en aval d'un catalogue déjà audité |
+| **27 couples (CICY, Γ) à recalculer** | **§5.34** : `matrice_substitution` était fausse dès que Γ permute deux facteurs projectifs. 1 224 lignes du scan Wilson-4, dont **213 SURVIT**, portent un verdict d'équivariance calculé dans une base mélangée — dans les deux sens, un SURVIT peut être usurpé, un éliminé peut l'avoir été à tort. Les 102 autres couples (σ = identité) sont intacts, et le §5.6 avec eux. **C'est le premier travail à reprendre** |
+| candidats ℤ₄ | **3 générations acquises** (§5.34) sur `#7745` et `#6947` (×2) : h⁰(V) équivariant nul, h¹(V) = 12, décomposition régulière 3+3+3+3 pour les quatre λ. **Reste** : ce sont des monades à rank_C = 2, et ni `hoppe_sur_espace` ni `f_sans_point_base` n'y sont généralisés — donc pas encore de verdict SURVIT complet |
 | couplages de Yukawa | hors périmètre |
 
 **Point de méthode sur les Higgs sans lignes de Wilson** : un E₆ avec n_anti = 0
@@ -2219,7 +2337,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 40 tests, ~4 min. À lancer après chaque modification,
+**`tests_regression.py` — 42 tests, ~5 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -2291,6 +2409,11 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | **§5.23** | **le générateur lui-même : 10 tirages sur une famille de 2 201** | **« ces fibrés n'existent pas sur ces CICYs »** — alors qu'ils n'avaient pas été engendrés |
 | **§5.27** | **l'espace « équivariant » d'un relèvement PROJECTIF** | **8 candidats à ℤ₂×ℤ₂** — les seuls survivants, et les seuls obstrués |
 | **§5.29** | **`domaine_valide` certifie h⁰ sans vérifier dim(S/I) = h⁰** | un modèle qui sous-compte les sections d'un facteur 2, sans un mot |
+| **§5.34** | **`verifier_descente` contrôlait S_g dans la base mélangée que S_g avait elle-même produite** | un écart « exactement nul » sur une action qui n'était pas l'action géométrique |
+
+La dernière est d'une espèce à part : rien n'y devient vide. Le contrôle interne
+et l'objet contrôlé partagent le défaut, donc le contrôle le confirme. Un filtre
+qui se vérifie lui-même ne vérifie rien — et c'est indétectable de l'intérieur.
 
 La septième est la plus coûteuse : c'est un filtre qu'on n'avait pas identifié
 comme tel. Un générateur incomplet ne se distingue d'un résultat d'absence par

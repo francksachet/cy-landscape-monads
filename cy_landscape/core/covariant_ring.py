@@ -198,12 +198,64 @@ def _action_bloc(M, ambient, debuts, tailles, r, s, d, p):
     return A
 
 
+def _reordonner_colonnes(ordre_src, tailles_src):
+    """
+    Permutation qui remet les colonnes du produit de Kronecker dans l'ordre
+    de `basis_multi`.
+
+    Le produit `kron(B_{r_0}, ..., B_{r_{m-1}})` indexe ses colonnes par le
+    m-uplet (i_{r_0}, ..., i_{r_{m-1}}), facteur r_0 le plus significatif ;
+    `basis_multi` les indexe par (i_0, ..., i_{m-1}), facteur 0 le plus
+    significatif. Les deux ne coincident que si `ordre_src` est l'identite.
+
+    Rend le tableau `perm` tel que A[:, perm] soit exprimee dans la base
+    de `basis_multi` : perm[k] = indice Kronecker du k-ieme monome naturel.
+    """
+    m = len(ordre_src)
+    # poids de chaque facteur dans l'indexation de Kronecker
+    poids = [1] * m
+    acc = 1
+    for t in range(m - 1, -1, -1):
+        poids[ordre_src[t]] = acc
+        acc *= tailles_src[ordre_src[t]]
+    total = acc
+    perm = np.zeros(total, dtype=np.int64)
+    for k in range(total):
+        # decomposition de k en base mixte (t_0, ..., t_{m-1}), facteur 0 en
+        # tete -- c'est l'indexation de basis_multi
+        reste, chiffres = k, [0] * m
+        for r in range(m - 1, -1, -1):
+            reste, chiffres[r] = divmod(reste, tailles_src[r])
+        perm[k] = sum(chiffres[r] * poids[r] for r in range(m))
+    return perm
+
+
 def matrice_substitution(M, ambient, sigma, degre, p):
     """
     Matrice de S_g : S_degre -> S_{degre o sigma^-1}, dans les bases
     `basis_multi` (facteur 0 le plus significatif).
 
     Le multidegre image verifie deg_img[sigma[r]] = degre[r].
+
+    ----------------------------------------------------------------------
+    L'ordre des colonnes n'est pas gratuit
+    ----------------------------------------------------------------------
+    Le produit de Kronecker est monte facteur d'ARRIVEE par facteur
+    d'arrivee (s = 0, 1, ...), ce qui met ses LIGNES dans l'ordre de
+    `basis_multi(deg_img)` -- correct -- mais ses COLONNES dans l'ordre
+    (sigma^-1(0), sigma^-1(1), ...) des facteurs de depart, qui n'est
+    l'ordre de `basis_multi(degre)` que si sigma est l'identite.
+
+    Tant que sigma fixait chaque facteur, l'erreur etait invisible. Des que
+    Gamma PERMUTE deux facteurs, la matrice rendue est celle de S_g lue dans
+    une base melangee : S_g cesse d'etre un morphisme d'anneaux, et
+    l'identite S_g(f.h) = S_g(f).S_g(h) tombe sur le premier exemple venu
+    (P1 x P1 x P2, sigma = (01), voir `t_substitution_morphisme`). Tout ce
+    qui est bati dessus -- polynomes covariants, descente au quotient,
+    espace des f equivariantes, decomposition de H^1(V) -- heritait alors
+    d'un systeme coherent avec lui-meme mais sans rapport avec l'action
+    geometrique. C'est ce qui donnait, sur les candidats Z4, une partie
+    invariante de 4 la ou l'indice en impose 3.
     """
     debuts, tailles, _ = _decoupage(ambient)
     m = len(ambient)
@@ -216,10 +268,15 @@ def matrice_substitution(M, ambient, sigma, degre, p):
         sigma_inv[sigma[r]] = r
 
     A = np.ones((1, 1), dtype=np.int64)
+    ordre_src, tailles_src = [], [0] * m
     for s in range(m):
         r = sigma_inv[s]
         B = _action_bloc(M, ambient, debuts, tailles, r, s, degre[r], p)
         A = np.kron(A, B) % p
+        ordre_src.append(r)
+        tailles_src[r] = B.shape[1]
+    if ordre_src != list(range(m)) and A.shape[1]:
+        A = A[:, _reordonner_colonnes(ordre_src, tailles_src)]
     return A, deg_img
 
 

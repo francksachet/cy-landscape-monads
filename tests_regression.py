@@ -2974,6 +2974,301 @@ def t_produit_cech():
 
 
 # ======================================================================
+# 23. La substitution est un morphisme d'anneaux
+# ======================================================================
+
+def _produit_S(amb, d1, d2, v1, v2, p):
+    """Coefficients du produit de deux polynomes sur basis_multi(d1 + d2)."""
+    from cy_landscape.core.sections import basis_multi
+    B1, B2 = basis_multi(amb, list(d1)), basis_multi(amb, list(d2))
+    d3 = [a + b for a, b in zip(d1, d2)]
+    B3 = basis_multi(amb, d3)
+    idx = {mo: k for k, mo in enumerate(B3)}
+    out = np.zeros(len(B3), dtype=np.int64)
+    for a, ca in zip(B1, v1):
+        if not ca:
+            continue
+        for b, cb in zip(B2, v2):
+            if not cb:
+                continue
+            k = idx[tuple(tuple(np.add(a[r], b[r])) for r in range(len(amb)))]
+            out[k] = (out[k] + int(ca) * int(cb)) % p
+    return out, d3
+
+
+@test("substitution : morphisme d'anneaux meme quand sigma permute")
+def t_substitution_morphisme():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    S_g est une substitution de coordonnees : c'est un morphisme d'anneaux,
+    donc S_g(f.h) = S_g(f).S_g(h), SANS exception. Cette identite est le sol
+    sur lequel repose tout le volet equivariant -- polynomes covariants,
+    descente au quotient, espace des f, decomposition de H^1(V).
+
+    `matrice_substitution` monte S_g par un produit de Kronecker facteur
+    d'ARRIVEE par facteur d'arrivee. Ses lignes sortent donc dans l'ordre de
+    `basis_multi`, mais ses COLONNES dans l'ordre (sigma^-1(0), sigma^-1(1),
+    ...) des facteurs de depart. Tant que sigma fixe chaque facteur les deux
+    ordres coincident et l'erreur est invisible ; des que Gamma ECHANGE deux
+    facteurs, la matrice rendue est celle de S_g lue dans une base melangee.
+    Le systeme reste coherent avec lui-meme -- les covariants se resolvent,
+    la descente se verifie, l'espace des f est non vide -- mais il ne decrit
+    plus l'action geometrique. C'est ainsi que les candidats Z4 recevaient
+    une partie invariante de 4 la ou l'indice en impose 3 (§5.34).
+
+    Trois volets :
+      (a) sigma = (01) sur P1 x P1 x P2 : l'identite doit tenir ;
+      (b) sigma = identite : temoin, elle tenait deja ;
+      (c) SABOTAGE : on remonte la matrice sans remettre les colonnes en
+          ordre, et l'identite doit TOMBER. Sans ce volet, le test passerait
+          aussi sur le code fautif si l'exemple etait mal choisi.
+    """
+    from cy_landscape.core.sections import basis_multi
+    from cy_landscape.core.covariant_ring import (matrice_substitution,
+                                                  _decoupage, _action_bloc)
+    p = 30029
+    amb = [1, 1, 2]
+    m = len(amb)
+    rng = np.random.RandomState(0)
+    total = sum(n + 1 for n in amb)
+
+    def tirer(sigma):
+        M = np.zeros((total, total), dtype=np.int64)
+        deb, tail, _ = _decoupage(amb)
+        for r in range(m):
+            s = sigma[r]
+            M[deb[r]:deb[r] + tail[r], deb[s]:deb[s] + tail[s]] = \
+                rng.randint(1, p, size=(tail[r], tail[s]))
+        return M.tolist()
+
+    def controle(M, sigma, brut=False):
+        """Nombre de couples (f, h) verifiant S_g(f.h) = S_g(f).S_g(h)."""
+        n_ok = n_tot = 0
+        for d1, d2 in (([1, 0, 0], [0, 1, 1]), ([1, 1, 0], [0, 1, 1]),
+                       ([0, 1, 0], [1, 0, 1]), ([1, 0, 1], [0, 1, 0])):
+            v1 = rng.randint(0, p, size=len(basis_multi(amb, d1)))
+            v2 = rng.randint(0, p, size=len(basis_multi(amb, d2)))
+            v3, d3 = _produit_S(amb, d1, d2, v1, v2, p)
+            if brut:
+                A1, i1 = _kron_brut(M, amb, sigma, d1, p)
+                A2, i2 = _kron_brut(M, amb, sigma, d2, p)
+                A3, i3 = _kron_brut(M, amb, sigma, d3, p)
+            else:
+                A1, i1 = matrice_substitution(M, amb, sigma, d1, p)
+                A2, i2 = matrice_substitution(M, amb, sigma, d2, p)
+                A3, i3 = matrice_substitution(M, amb, sigma, d3, p)
+            gauche = (A3 @ v3) % p
+            droite, di = _produit_S(amb, i1, i2, (A1 @ v1) % p, (A2 @ v2) % p, p)
+            assert list(di) == list(i3), (di, i3)
+            n_tot += 1
+            if not ((gauche - droite) % p).any():
+                n_ok += 1
+        return n_ok, n_tot
+
+    def _kron_brut(M, ambient, sigma, degre, p):
+        """La version d'avant : Kronecker sans remise en ordre des colonnes."""
+        deb, tail, _ = _decoupage(ambient)
+        mm = len(ambient)
+        deg_img = [0] * mm
+        for r in range(mm):
+            deg_img[sigma[r]] = degre[r]
+        s_inv = [0] * mm
+        for r in range(mm):
+            s_inv[sigma[r]] = r
+        A = np.ones((1, 1), dtype=np.int64)
+        for s in range(mm):
+            r = s_inv[s]
+            A = np.kron(A, _action_bloc(M, ambient, deb, tail, r, s,
+                                        degre[r], p)) % p
+        return A, deg_img
+
+    # --- (a) sigma echange les deux P1 ---------------------------------
+    sigma = [1, 0, 2]
+    M = tirer(sigma)
+    ok, tot = controle(M, sigma)
+    assert ok == tot, (f"S_g n'est pas un morphisme d'anneaux quand sigma "
+                       f"permute les facteurs : {ok}/{tot} couples seulement")
+
+    # --- (b) temoin : sigma = identite ---------------------------------
+    sigma0 = list(range(m))
+    ok0, tot0 = controle(tirer(sigma0), sigma0)
+    assert ok0 == tot0, (f"temoin en defaut : {ok0}/{tot0}")
+
+    # --- (c) sabotage : sans remise en ordre, cela doit TOMBER ---------
+    ok_s, tot_s = controle(M, sigma, brut=True)
+    assert ok_s == 0, (f"le sabotage passe encore ({ok_s}/{tot_s}) : ce test "
+                       f"ne mord pas, l'exemple ne distingue pas les deux "
+                       f"ordres de colonnes")
+
+    return (f"{tot} couples (f, h) avec sigma = (01), {tot0} avec sigma = id ; "
+            f"sabotage rejete {tot_s}/{tot_s}")
+
+
+# ======================================================================
+# 24. H^1(V) sous Gamma : la representation reguliere
+# ======================================================================
+
+@test("H^1(V) sous Z4 : covariance matricielle et representation reguliere")
+def t_h1_reguliere_z4():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    Deux affirmations, sur un candidat REEL (#7745, P1xP1xP7, Z4, rank_C = 2,
+    dont le groupe permute les deux P1 -- c'est-a-dire le cas que le defaut
+    du §5.34 rendait faux).
+
+    (1) La covariance, en matrices :  T_C . M_f = lambda . M_f . T_B.
+        C'est elle qui fait de f un morphisme de representations et qui rend
+        l'image STABLE ; sans elle, decomposer le conoyau n'a aucun sens. On
+        la verifie au lieu de la supposer, et on verifie aussi la stabilite
+        de l'image, qui en est la consequence directe.
+
+    (2) La decomposition de H^1(V) est un multiple de la representation
+        REGULIERE. Ce n'est pas un ajustement : twister la structure
+        equivariante de V par un caractere chi ne change aucune classe de
+        Chern sur le quotient, donc chaque caractere recoit le meme
+        |chi(V)|/|Gamma| = 12/4 = 3 -- a condition que h^0 = h^2 = h^3
+        s'annulent en haut, ce qui est le cas ici. C'est |Gamma| equations
+        au lieu d'une, et c'est ce qui a fait tomber le defaut : la seule
+        partie invariante, elle, tombait juste pour lambda = -1.
+
+    Le test est bon marche (~4 s) parce que les dimensions sont petites :
+    dim R_b = 16, dim R_c = 28.
+    """
+    ici = os.path.dirname(os.path.abspath(__file__))
+    for f in ('cicyquotients.m', 'cicylist.txt'):
+        if not os.path.exists(os.path.join(ici, f)):
+            return f"{f} absent — test ignore"
+    from cy_landscape.core.braun_symmetry import (parse_symmetries, ordres_rt,
+                                                  matrice_mod_p)
+    from cy_landscape.core.gamma_action import (choisir_premier,
+                                                racine_primitive,
+                                                permutation_charges)
+    from cy_landscape.core.covariant_ring import (resoudre_covariants,
+                                                  tirer_covariants,
+                                                  CovariantRing, rref_complet,
+                                                  permutation_facteurs_numerique)
+    from cy_landscape.core.equivariant_monad import (espace_f_equivariant,
+                                                     decomposition_h1_V,
+                                                     matrice_quotient)
+    from cy_landscape.core.sections import _mult_matrix
+    from cy_landscape.data.parse_oxford import load_oxford_file
+
+    NUM, N_GEN = 7745, 12
+    b = [[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 1, 0], [0, 0, 1]]
+    c = [[1, 1, 0], [1, 1, 1]]
+
+    E = {e['num']: e for e in load_oxford_file(os.path.join(ici, 'cicylist.txt'))}
+    e = E.get(NUM)
+    assert e is not None, f"CICY {NUM} absente de cicylist.txt"
+    amb, cfg = e['ambient'], np.asarray(e['config'])
+    SYM = parse_symmetries(os.path.join(ici, 'cicyquotients.m'))
+    from wilson_match import parse_braun, parse_cicylist, apparier
+    braun = parse_braun(os.path.join(ici, 'cicyquotients.m'))
+    cl = parse_cicylist(os.path.join(ici, 'cicylist.txt'))
+    corr, _, _ = apparier(braun, cl)
+    inv = {v: k for k, v in corr.items()}
+    assert NUM in inv, f"CICY {NUM} non appariee"
+    sy = [y for y in SYM[inv[NUM]]['symetries'] if y['nom'] == 'Z4']
+    assert sy, f"pas de Z4 chez Braun pour #{NUM}"
+    s = sy[0]
+
+    ordres = ordres_rt(s['coord']) | ordres_rt(s['poly']) | {2, 4}
+    p, _ = choisir_premier(sorted(ordres), minimum=30011)
+    rac = {n: racine_primitive(p, n) for n in ordres}
+    Mc = [matrice_mod_p(v, p, rac) for v in s['coord']]
+    Np = [matrice_mod_p(v, p, rac) for v in s['poly']]
+    res = resoudre_covariants(amb, cfg, Mc, Np, p)
+    assert res is not None, "sigma non extractible"
+    vN = res['par_convention']['N']
+    co = tirer_covariants(vN['base'], res['offsets'], res['dims'], p,
+                          np.random.RandomState(0))
+    A = CovariantRing(amb, cfg, co, p)
+
+    sigma = permutation_facteurs_numerique(Mc[0], amb, p)
+    assert list(sigma) != list(range(len(amb))), \
+        ("le generateur ne permute aucun facteur : ce candidat ne teste pas "
+         "le cas qui nous interesse")
+
+    def bloc(charges):
+        perm = permutation_charges(charges, sigma)
+        dd = [A.dimY(list(x)) for x in charges]
+        dep = [sum(dd[:k]) for k in range(len(charges))]
+        T = np.zeros((sum(dd), sum(dd)), dtype=np.int64)
+        for k, ch in enumerate(charges):
+            Aq, deg_img = matrice_quotient(A, Mc[0], amb, sigma, list(ch), p)
+            kk = perm[k]
+            assert list(deg_img) == list(charges[kk]), (deg_img, charges[kk])
+            T[dep[kk]:dep[kk] + dd[kk], dep[k]:dep[k] + dd[k]] = Aq
+        return T % p
+
+    TB, TC = bloc(b), bloc(c)
+    out = espace_f_equivariant(A, amb, b, c, Mc, p)
+    assert out['etat'] == 'ok', out['etat']
+    assert out['solutions'], "aucun lambda ne donne de f equivariante"
+
+    rng = np.random.RandomState(11)
+    n_lam = 0
+    for sol in out['solutions']:
+        lam = int(sol['lambda'][0])
+        v = (rng.randint(0, p, size=sol['base'].shape[0]) @ sol['base']) % p
+        # matrice de f sur (+)R_b -> (+)R_c
+        dimc = [A.dimY(cj) for cj in c]
+        rangees = []
+        for j, cj in enumerate(c):
+            blocs = []
+            for i, bb in enumerate(b):
+                if (j, i) not in out['offsets']:
+                    blocs.append(np.zeros((dimc[j], A.dimY(list(bb))),
+                                          dtype=np.int64))
+                    continue
+                deg = out['degres'][j][i]
+                S, idx, free, piv, Mred = A.quotient(deg)
+                coeffs = np.zeros(len(S), dtype=np.int64)
+                for t, k in enumerate(free):
+                    coeffs[k] = v[out['offsets'][(j, i)] + t]
+                blocs.append(_mult_matrix(A, list(bb), deg, (S, coeffs), cj))
+            rangees.append(np.hstack(blocs) % p)
+        Mf = np.vstack(rangees) % p
+
+        # (1) covariance matricielle, avec le lambda ANNONCE
+        ecart = (TC @ Mf - lam * (Mf @ TB)) % p
+        assert not ecart.any(), \
+            (f"lambda = {lam} : T_C.M_f != lambda.M_f.T_B -- f n'est pas un "
+             f"morphisme de representations, le conoyau n'a pas d'action")
+
+        # stabilite de l'image, consequence directe
+        W, _ = rref_complet(Mf.T.copy(), p)
+        WW, _ = rref_complet(np.vstack([W, (W @ TC.T) % p]) % p, p)
+        assert WW.shape[0] == W.shape[0], \
+            f"lambda = {lam} : l'image de f n'est pas stable sous T_C"
+
+        # (2) representation reguliere
+        d = decomposition_h1_V(A, amb, b, c, Mc, sol['base'], out['offsets'],
+                               out['dims'], out['degres'], p,
+                               np.random.RandomState(11), lam=lam)
+        assert d is not None, f"lambda = {lam} : decomposition indisponible"
+        assert d['coherent'], f"lambda = {lam} : semi-simplicite en defaut"
+        assert d['h1'] == N_GEN, (f"lambda = {lam} : h1(V) = {d['h1']}, "
+                                  f"{N_GEN} attendu")
+        attendu = N_GEN // 4
+        assert sorted(d['sur_H1'].values()) == [attendu] * 4, \
+            (f"lambda = {lam} : H^1(V) se decompose en "
+             f"{sorted(d['sur_H1'].values())} au lieu de la representation "
+             f"reguliere {[attendu] * 4} -- l'action portee sur le conoyau "
+             f"n'est pas celle de Gamma")
+        assert d['sur_H1'].get(1) == attendu, \
+            (f"lambda = {lam} : partie invariante {d['sur_H1'].get(1)} au "
+             f"lieu de {attendu} = |chi|/|Gamma|")
+        n_lam += 1
+
+    return (f"#{NUM} Z4, sigma = {list(sigma)} : {n_lam} valeurs de lambda, "
+            f"covariance matricielle exacte, image stable, "
+            f"H^1(V) = {N_GEN // 4} x representation reguliere")
+
+
+# ======================================================================
 
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith('t_')]

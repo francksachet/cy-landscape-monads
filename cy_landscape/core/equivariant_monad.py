@@ -935,7 +935,8 @@ def decomposition_h1_V_abelien(anneau, ambient, b_charges, c_charges,
 
 
 def decomposition_h1_V(anneau, ambient, b_charges, c_charges, coord_mats,
-                       base, offsets, dims, degres, p, rng, valeurs=None):
+                       base, offsets, dims, degres, p, rng, valeurs=None,
+                       lam=None):
     """
     Decomposition de H^1(V) en representations de Gamma.
 
@@ -956,12 +957,32 @@ def decomposition_h1_V(anneau, ambient, b_charges, c_charges, coord_mats,
     conoyau.
 
     ----------------------------------------------------------------------
-    Reference independante
+    Le twist lambda, mesure et non suppose
     ----------------------------------------------------------------------
-    Pour Gamma agissant librement, n_gen(X/Gamma) = n_gen(X)/|Gamma|. Avec
-    h^1(V) = 6 et |Gamma| = 2, la partie invariante doit valoir exactement 3.
-    C'est une valeur connue D'AVANCE : une decomposition en 4+2 ou 5+1
-    signalerait une erreur dans l'action, dans le conoyau, ou dans le fibre.
+    f n'est pas equivariante au sens strict : elle verifie, en matrices,
+
+        T_C . M_f  =  lambda . M_f . T_B                              (**)
+
+    -- identite VERIFIEE numeriquement, pas postulee (voir
+    `t_covariance_matricielle`). Autrement dit f est un morphisme de
+    representations de (H^0(B), T_B) vers (H^0(C), lambda^-1 . T_C). C'est
+    donc lambda^-1 . T_C, et non T_C, qui agit sur le conoyau : la partie
+    INVARIANTE de H^1(V) est le sous-espace propre de T_C pour la valeur
+    lambda. Passer `lam` fait lire la decomposition sur l'action honnete,
+    dont la valeur propre 1 est alors l'invariant.
+
+    ----------------------------------------------------------------------
+    Reference independante : la representation REGULIERE
+    ----------------------------------------------------------------------
+    Le juge n'est pas seulement « la partie invariante vaut n_gen/|Gamma| ».
+    Twister la structure equivariante de V par un caractere chi ne change
+    aucune classe de Chern sur le quotient, donc chi(X/Gamma, V_chi) est le
+    meme pour tous les chi ; et h^0 = h^2 = h^3 = 0 en haut force la nullite
+    de chacun de leurs sous-espaces propres. CHAQUE caractere recoit donc
+    exactement |chi(V)|/|Gamma| : la decomposition doit etre un multiple de
+    la representation reguliere. C'est |Gamma| equations et non une seule --
+    et c'est ce test, et non le seul invariant, qui a fait tomber le defaut
+    d'ordre des colonnes de `matrice_substitution` (§5.34).
 
     Deux controles internes accompagnent le calcul : la somme des
     multiplicites doit valoir dim R_c d'une part, dim de l'image d'autre part
@@ -1023,6 +1044,14 @@ def decomposition_h1_V(anneau, ambient, b_charges, c_charges, coord_mats,
         T[depart[jj]:depart[jj] + dimc[jj],
           depart[j]:depart[j] + dimc[j]] = A
     T %= p
+
+    # L'ACTION QUI COMPTE EST lambda^-1 . T_C (voir l'en-tete). Sans `lam`
+    # le calcul reste celui de T_C brut : les valeurs propres sont alors
+    # decalees du facteur lambda, ce qui est sans effet quand la reponse est
+    # la representation reguliere, mais faux des que la decomposition n'est
+    # plus equilibree.
+    if lam is not None:
+        T = (pow(int(lam) % p, -1, p) * T) % p
 
     # LES VALEURS PROPRES SE LISENT SUR L'OPERATEUR, pas sur l'ordre du
     # groupe. Si T^n = c.Id avec c != 1 -- relevement projectif --, les

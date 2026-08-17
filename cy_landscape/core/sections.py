@@ -213,6 +213,10 @@ def _mult_matrix(R, a_src, a_f, fpoly, a_dst):
     """Matrice de la multiplication R_{a_src} --(. f)--> R_{a_dst}."""
     S_src, idx_src, free_src, _, _ = R.quotient(a_src)
     S_dst, idx_dst, free_dst, _, _ = R.quotient(a_dst)
+    # Le modulo est celui de L'ANNEAU, pas la constante P du module : un
+    # CovariantRing travaille dans GF(p) avec p != P, et accumuler ici
+    # modulo P fausserait toute somme qui depasse P.
+    p = getattr(R, 'p', P)
     fb, fc = fpoly
     cols = []
     for i in free_src:
@@ -221,7 +225,7 @@ def _mult_matrix(R, a_src, a_f, fpoly, a_dst):
         for fm, cf in zip(fb, fc):
             key = tuple(tuple(np.add(m[r], fm[r])) for r in range(len(a_src)))
             j = idx_dst.get(key)
-            if j is not None: v[j] = (v[j] + cf) % P
+            if j is not None: v[j] = (v[j] + cf) % p
         cols.append(R.reduce_vec(a_dst, v))
     if not cols: return np.zeros((len(free_dst), 0), dtype=np.int64)
     return np.array(cols, dtype=np.int64).T

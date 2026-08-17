@@ -1834,6 +1834,12 @@ exactement le piège du §5.3, et il est écarté ici par mesure.
 Ce sont les **premiers candidats d'ordre 4 sans cocycle** à passer l'étape qui
 tue tout le reste.
 
+> **⚠ CONCLUSION RETIRÉE — voir §5.29.** Trois de ces quatre calculent h⁰(V)
+> dans un modèle qui **sous-compte les sections**. `domaine_valide` certifie le
+> h⁰ de Koszul mais ne vérifie jamais que dim(S/I) lui est égal, et l'écart est
+> réel. Ce qui reste acquis du §5.28 : la relaxation des cases nulles est juste
+> et testée ; ce qui tombe : les quatre candidats.
+
 **Ce qui manque encore, et c'est une seule chose.** Ils ont tous **rank_C = 2**.
 Or `hoppe_sur_espace`, `f_sans_point_base` et `decomposition_h1_V` supposent
 rank_C = 1 et se déclarent non calculables au-delà. Le verdict reste donc
@@ -1850,6 +1856,52 @@ simplement le conoyau — ce candidat-là demandera un traitement à part.
 **Le test (37ᵉ)** vérifie les deux sens : une case c−b négative ne fait plus
 sortir du domaine, **et** un bᵢ ou un cⱼ négatif le fait toujours. Supprimer le
 contrôle de signe restant le fait échouer.
+
+---
+
+### 5.29 Le domaine certifie une chose et en vérifie une autre
+
+Trouvé en généralisant la décomposition de H¹(V) à rank_C = 2 pour trancher le
+§5.28 — et c'est la généralisation qui a révélé la faute, pas une relecture.
+
+Les quatre candidats ℤ₄ ont h¹(V) = 12 au catalogue. Le conoyau calculé donne
+**11, 8, 8, 14**. Un conoyau qui vaut 8 quand h⁰(C) − h⁰(B) = 12 est impossible :
+le rang de f ne peut pas dépasser h⁰(B). La cible était donc trop petite.
+
+```
+  #6836, charge (0,0,0,0,1) sur P1^4 x P3 :   dim(S/I) = 4   h0 Koszul = 8
+  #6836, charge (0,0,1,1,1) :                 dim(S/I) = 16  h0 Koszul = 24
+```
+
+**Le modèle sous-compte d'un facteur deux** — H¹ d'un terme de Koszul contribue
+à h⁰(Y) sans avoir d'antécédent polynomial dans l'anneau ambiant.
+
+Et `domaine_valide` ne le voit pas : elle vérifie que le h⁰ de Koszul est
+**certifié**, jamais que dim(S_a/I_a) lui est **égal** — ce qui est pourtant
+tout ce que le modèle prétend. Elle certifie une chose et en vérifie une autre.
+
+**Ce que cela retire.** Les quatre candidats ℤ₄ du §5.28 calculaient h⁰(V)
+équivariant dans un espace qui n'est pas H⁰(Y, ·). Le résultat « h⁰ = 0 à
+λ = ±1 » ne veut donc rien dire pour trois d'entre eux. **Le §5.28 est retiré**
+sur ce point. Ce qui en reste, et qui est juste : la relaxation des cases c−b
+négatives, défendue par le 37ᵉ test.
+
+**Ce que cela ne retire pas.** Vérification faite sur **120 candidats survivants
+tirés du scan : 120 cohérents, zéro écart**. Les 691 orbites ne sont pas
+touchées. #6890 et #6947 sont exacts sur leurs 26 charges chacun ; **#6715 est
+en écart sur une** — (3,0,2,3,0), 48 contre 52 — et mérite un réexamen.
+
+**Ce que je n'ai PAS fait, et pourquoi.** Ajouter `dim(S/I) == h⁰` comme
+condition de `domaine_valide` fait tomber **cinq** tests de non-régression, dont
+le cas SU(5)/ℤ₂×ℤ₂ de #6947. C'est-à-dire que le corpus de référence du projet
+contient des résultats obtenus hors du modèle. Changer le critère d'acceptation
+de tout le pipeline dans le même geste que la découverte du problème serait
+précisément la précipitation que le §8 proscrit.
+
+La mesure est donc **exposée sans filtrer** : `charges_hors_modele(ambient,
+config, charges)` rend la liste des charges en écart. La décision — resserrer le
+domaine et réviser ce qui tombe, ou étendre le modèle pour qu'il représente
+vraiment H⁰(Y, ·) — reste à prendre, les yeux sur les cinq tests concernés.
 
 ---
 
@@ -1990,6 +2042,7 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | §5.25 | contrôle du repli tiré **par orbite** : une orbite géante n'en recevait qu'un | un repli entièrement faux validé par « 0 discordance » |
 | **§5.23** | **le générateur lui-même : 10 tirages sur une famille de 2 201** | **« ces fibrés n'existent pas sur ces CICYs »** — alors qu'ils n'avaient pas été engendrés |
 | **§5.27** | **l'espace « équivariant » d'un relèvement PROJECTIF** | **8 candidats à ℤ₂×ℤ₂** — les seuls survivants, et les seuls obstrués |
+| **§5.29** | **`domaine_valide` certifie h⁰ sans vérifier dim(S/I) = h⁰** | un modèle qui sous-compte les sections d'un facteur 2, sans un mot |
 
 La septième est la plus coûteuse : c'est un filtre qu'on n'avait pas identifié
 comme tel. Un générateur incomplet ne se distingue d'un résultat d'absence par

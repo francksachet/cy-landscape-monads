@@ -339,6 +339,44 @@ def domaine_valide(ambient, config, b_charges, c_charges, rank_c_max=1):
     return True
 
 
+def charges_hors_modele(ambient, config, charges):
+    """
+    Charges ou dim(S_a / I_a) != h^0(Y, O(a)) alors que h^0 est CERTIFIE.
+
+    `domaine_valide` verifie que le h^0 de Koszul est certifie. Elle ne
+    verifie PAS l'egalite ci-dessus, qui est pourtant tout ce que le modele
+    pretend. L'ecart existe : sur #6836 (ambiant P1^4 x P3) la charge
+    (0,0,0,0,1) donne dim(S/I) = 4 contre h^0 = 8 -- le modele sous-compte
+    d'un facteur deux, H^1 d'un terme de Koszul contribuant a h^0(Y) sans
+    antecedent polynomial dans l'anneau ambiant.
+
+    Cette fonction MESURE l'ecart sans rien filtrer. En faire une condition
+    de `domaine_valide` changerait ce que tout le pipeline accepte -- sur le
+    corpus actuel, cinq tests de non-regression tombent, dont le cas
+    SU(5)/Z2xZ2 de #6947. Ce n'est pas une decision a prendre dans le meme
+    geste que la decouverte du probleme : d'ou une mesure exposee, et pas un
+    filtre pose en silence.
+
+    Etat mesure : #6890 et #6947 exacts sur leurs 26 charges ; #6715 en
+    ecart sur une ; les candidats Z4 du §5.28 en ecart, ce qui RETIRE la
+    conclusion de ce paragraphe.
+    """
+    from cy_landscape.core.exact_cohomology import koszul_cohomology_ex
+    anneau = get_ring(ambient, config)
+    out = []
+    for x in charges:
+        x = list(x)
+        if any(v < 0 for v in x):
+            continue
+        r = koszul_cohomology_ex(ambient, config, x)
+        if not r['certified_by_degree'][0]:
+            continue
+        d = anneau.dimY(x)
+        if d != r[0]:
+            out.append((tuple(x), d, r[0]))
+    return out
+
+
 _RINGS = {}
 
 

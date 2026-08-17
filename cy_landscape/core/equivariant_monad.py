@@ -970,35 +970,59 @@ def decomposition_h1_V(anneau, ambient, b_charges, c_charges, coord_mats,
     Renvoie {'h1': , 'sur_Rc': , 'sur_image': , 'sur_H1': , 'coherent': }.
     """
     from cy_landscape.core.sections import _mult_matrix
-    if len(c_charges) != 1 or len(coord_mats) != 1:
+    if len(coord_mats) != 1:
         return None                    # ce chemin ne traite que Gamma cyclique
-    c = list(c_charges[0])
     if valeurs is None:
         valeurs = [1, p - 1]           # Z2
 
-    v = (rng.randint(0, p, size=base.shape[0]) @ base) % p
-    blocs = []
-    for i, bb in enumerate(b_charges):
-        if (0, i) not in offsets:
-            blocs.append(np.zeros((anneau.dimY(c), anneau.dimY(list(bb))),
-                                  dtype=np.int64))
-            continue
-        deg = degres[0][i]
-        S, idx, free, piv, Mred = anneau.quotient(deg)
-        coeffs = np.zeros(len(S), dtype=np.int64)
-        for t, k in enumerate(free):
-            coeffs[k] = v[offsets[(0, i)] + t]
-        blocs.append(_mult_matrix(anneau, list(bb), deg, (S, coeffs), c))
-    Mf = np.hstack(blocs) % p
+    # RANK_C QUELCONQUE. La cible n'est plus R_c mais la SOMME DIRECTE
+    # (+)_j R_{c_j}, et Gamma peut PERMUTER les facteurs : l'operateur n'est
+    # alors pas diagonal par blocs. Cette generalisation n'est pas cosmetique
+    # -- les quatre candidats Z4 du §5.28, seule route vers le rang 4 exempte
+    # du cocycle du §5.27, ont tous rank_C = 2, et c'est le `!= 1` d'origine
+    # qui les laissait sans nombre de generations.
+    cs = [list(x) for x in c_charges]
+    nC = len(cs)
+    dimc = [anneau.dimY(cj) for cj in cs]
+    depart = [sum(dimc[:j]) for j in range(nC)]
+    dimC = sum(dimc)
 
-    W, pivW = rref_complet(Mf.T.copy(), p)          # lignes = image dans R_c
-    dimC = anneau.dimY(c)
+    v = (rng.randint(0, p, size=base.shape[0]) @ base) % p
+    rangees = []
+    for j, cj in enumerate(cs):
+        blocs = []
+        for i, bb in enumerate(b_charges):
+            if (j, i) not in offsets:
+                # case de degre negatif : f_{j,i} = 0 (§5.28)
+                blocs.append(np.zeros((dimc[j], anneau.dimY(list(bb))),
+                                      dtype=np.int64))
+                continue
+            deg = degres[j][i]
+            S, idx, free, piv, Mred = anneau.quotient(deg)
+            coeffs = np.zeros(len(S), dtype=np.int64)
+            for t, k in enumerate(free):
+                coeffs[k] = v[offsets[(j, i)] + t]
+            blocs.append(_mult_matrix(anneau, list(bb), deg, (S, coeffs), cj))
+        rangees.append(np.hstack(blocs) % p)
+    Mf = np.vstack(rangees) % p
+
+    W, pivW = rref_complet(Mf.T.copy(), p)          # lignes = image dans (+)R_c
     h1 = dimC - W.shape[0]
 
     sigma = permutation_facteurs_numerique(coord_mats[0], ambient, p)
-    T, deg_img = matrice_quotient(anneau, coord_mats[0], ambient, sigma, c, p)
-    if list(deg_img) != c:
-        return None
+    rho = permutation_charges(cs, sigma)
+    if rho is None:
+        return None                    # Gamma ne permute pas les c_j
+    T = np.zeros((dimC, dimC), dtype=np.int64)
+    for j, cj in enumerate(cs):
+        A, deg_img = matrice_quotient(anneau, coord_mats[0], ambient, sigma,
+                                      cj, p)
+        jj = rho[j]
+        if list(deg_img) != cs[jj]:
+            return None
+        T[depart[jj]:depart[jj] + dimc[jj],
+          depart[j]:depart[j] + dimc[j]] = A
+    T %= p
 
     tot = multiplicites_propres(T, p, valeurs)
     sur_W = multiplicites_propres(T, p, valeurs, base=W)

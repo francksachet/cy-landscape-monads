@@ -10,6 +10,45 @@
 
 ---
 
+## 0. Où reprendre — point d'entrée
+
+**État au 17 août 2026.** Dépôt à `4b4a2d0` (§5.34), **42 tests verts**,
+`python tests_regression.py` avant toute chose. Environnement : Windows,
+PowerShell (`;` et non `&&`, `Tee-Object`, `python -u`).
+
+**Le travail suivant, dans l'ordre :**
+
+1. **Recalculer les 27 couples (CICY, Γ) touchés par le §5.34.** C'est le seul
+   point où le dépôt contient aujourd'hui des chiffres qu'on sait faux : 1 224
+   lignes de `scan_wilson4/results_equivariance_f.jsonl`, dont **213 SURVIT**,
+   ont été calculées avec une `matrice_substitution` fausse. Il faut retirer
+   sélectivement ces lignes **et** les lots correspondants du checkpoint
+   (`progress_equivariance_f.json`), puis relancer sur ces CICYs seules —
+   `--cicy` n'accepte pour l'instant qu'un entier, à étendre en liste.
+   CICYs concernées : #22, #261, #343, #1262, #1295, #1298, #1441, #1701,
+   #2317, #2360, #2543, #2544, #3929, #4071, #4109, #5273, #5311, #5425,
+   #5958, #6173, #6204, #6225, #6229, #6231, #6724, #6804, #7279.
+2. **Généraliser `hoppe_sur_espace` et `f_sans_point_base` à `rank_C = 2`**,
+   pour que les candidats ℤ₄ du §2.3 — trois générations déjà acquises —
+   puissent recevoir un vrai verdict de stabilité.
+3. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
+   §5.32) : sans lui, `#6836` et `#7735` restent hors de portée, et les
+   dimensions exactes de H¹ sur les charges hors modèle aussi.
+4. **Fermer les trous de couverture de `scan_wilson4`** : 51 % des réalisations
+   non testées, 2 lots manquants sur 3 716.
+
+**Deux questions ouvertes, moins urgentes** : durcir `domaine_valide` avec
+`dim(S/I) == h⁰` (casse 5 tests, décision non prise, §5.29) ; et réexaminer
+`#6715`, dont une charge a `dim(S/I) ≠ h⁰`.
+
+**La discipline qui a trouvé tous les défauts** est au §8 — en particulier la
+*règle des filtres*. Le §5.34 en donne la forme la plus dure : le contrôle
+interne et l'objet contrôlé partageaient le même défaut, donc le contrôle le
+confirmait. Seule une référence **extérieure au module** peut faire tomber ce
+genre de chose.
+
+---
+
 ## 1. Objet
 
 Recherche de fibrés vectoriels stables à trois générations sur les variétés de
@@ -27,72 +66,88 @@ principale — la voie des monades positives paraissant fermée au rang 5 (§5.9
 
 Chaîne complète : monade → stabilité de Hoppe → symétrie librement agissante →
 idéal Γ-covariant → f équivariante → stabilité **restreinte au sous-espace
-équivariant** → surjectivité de f.
+équivariant** → surjectivité de f → décomposition de H¹(V) sous Γ.
 
-Point de départ : scan `scan_wilson2` sur les 194 CICYs à symétrie librement
-agissante (classification de Braun, JHEP 1104 (2011) 005), 122 min sur 7 cœurs.
-115 fibrés Hoppe-stables, 0 rejeté par l'audit, 108 passant le test nécessaire
-sur les charges.
+### 2.1 Deux candidats entièrement vérifiés
 
-> **Reproductibilité (§5.23).** Ces deux candidats sortaient d'un générateur qui
-> tirait **dix** configurations au hasard dans une famille de 2 201, sur un RNG
-> partagé — ils ont d'ailleurs disparu du scan suivant, sans qu'aucun filtre ne
-> les élimine. La famille est maintenant **énumérée** : leur présence est
-> démontrée et non plus tirée au sort. Le scan qui fait foi est `scan_wilson4`,
-> à relancer (§9) ; `scan_wilson2` reste la seule trace produite avant la
-> correction.
-
-Balayage d'équivariance sur ces 108 candidats (≈ 1 h, mono-cœur) : 71 dans le
-domaine du modèle S/I, 3 878 couples (candidat, symétrie, λ).
-
-| | |
-|---|---|
-| tués par h⁰(V) équivariant | 3 452 |
-| indéterminés (certificat de surjectivité hors de portée) | 423 |
-| **survivants** | **3 couples, soit 2 candidats** |
-
-**Les deux candidats retenus :**
+Ce sont les seuls sur lesquels **toute** la chaîne a été parcourue, chaque
+maillon compris.
 
 | CICY | jauge | rang | cohomologie | Γ | λ | n_gen amont | générations |
 |---|---|---|---|---|---|---|---|
 | **6890** | SO(10) | 4 | [0, 6, 0, 0] | ℤ₂ | **+1 seul** | 6 | 3 |
 | **6947** | SO(10) | 4 | [0, 6, 0, 0] | ℤ₂ | **+1 seul** | 6 | 3 |
 
-Trois remarques, dans l'ordre d'importance.
+Sur eux : critère de Hoppe vérifié en entier sur le sous-espace équivariant,
+h⁰(∧^p V) = 0 pour p = 1, 2, 3, h³(V) inclus (§5.5) ; surjectivité de f certifiée
+à λ = +1, **λ = −1 présentant un déficit de rang stable** (§5.4) — la structure
+équivariante n'est donc pas libre ; et les trois générations établies par
+**décomposition explicite**, H¹(V) = 3 + 3 sous ℤ₂ (§5.6), non par division de 6
+par 2. Spectre : 16 → 3 + 3, 10 → H¹(∧²V) = 8 = 2 + 6 (§5.7). Avec une ligne de
+Wilson ℤ₂ en Pati–Salam : **3 générations complètes (4,2,1) + (4̄,1,2)**, et 2 ou
+6 bidoublets de Higgs selon la corrélation (§5.8).
 
-**`#6890` était invisible pour l'ancien test.** Γ n'y agit que par des phases,
-donc `equivariance.py` le marquait `test_non_trivial = False` : le test sur les
-charges ne disait **rien** à son sujet, ni pour ni contre. Le test au niveau des
-polynômes, lui, dit quelque chose, et `#6890` passe. C'est toute la catégorie
-laissée en suspens par l'ancienne partition qui se rouvre.
+Ces deux-là **ne peuvent pas** donner le Modèle Standard : les lignes de Wilson
+préservent le rang, SO(10) est de rang 5, le MS de rang 4. Avec |Γ| = 2 on
+plafonne à Pati–Salam ou SU(5) flipped. Aller plus loin demande un Γ plus gros.
 
-**Corollaire : la partition « 6 réellement contraints / 25 non concluants » de
-l'ancienne version n'a plus lieu d'être.** Elle mesurait la puissance du test
-disponible à l'époque, pas une propriété des candidats.
+Ils sont **intacts après le §5.34** : σ y est l'identité.
 
-**La structure équivariante n'est pas libre.** Sur les deux candidats, une seule
-des deux relèvements de ℤ₂ donne un fibré : λ = +1 est certifié surjectif,
-λ = −1 présente un déficit de rang stable. Rien avant le §5.4 ne voyait cette
-distinction.
+### 2.2 Le balayage qui fait foi — `scan_wilson4`
 
-**Le critère de Hoppe est vérifié en entier sur eux**, restreint au sous-espace
-équivariant : h⁰(∧^p V) = 0 pour p = 1, 2, 3 — h³(V) inclus (§5.5). Plus la
-surjectivité de f, certifiée à λ = +1 (§5.4).
+Le générateur qui a produit `#6890` et `#6947` tirait **dix** configurations au
+hasard dans une famille de 2 201 (§5.23). La famille est maintenant **énumérée**.
+Le scan de référence est `scan_wilson4`, et il ne ressemble pas au précédent :
 
-**Et les trois générations sont établies par décomposition explicite** :
-H¹(V) = 3 invariants + 3 anti-invariants sous ℤ₂ (§5.6), et non par division de
-6 par 2.
+| | |
+|---|---|
+| lignes de verdict | 174 847 |
+| **SURVIT** | **33 099** — toutes SO(10), rang 4, n_gen(X/Γ) = 3 |
+| (B, C) distincts | 2 857, sur **91 CICYs** |
+| orbites sous Aut(config) (§5.25) | **691** |
+| violations d'intégrité | **0** |
+| groupes | ℤ₂ : 32 533 · ℤ₂×ℤ₂ : 566 |
 
-**Le spectre est calculé** : 16 → H¹(V) = 3 + 3 (§5.6), 10 → H¹(∧²V) = 8, dont
-2 + 6 sous ℤ₂ (§5.7). Avec une ligne de Wilson ℤ₂ en Pati–Salam, cela donne
-**3 générations complètes (4,2,1) + (4̄,1,2)**, et 2 ou 6 bidoublets de Higgs
-selon la corrélation choisie (§5.8).
+`#6890` y donne 12 orbites, `#6947` 1, `#6715` 3. Autrement dit : les deux
+candidats du §2.1 ne sont pas rares, ils étaient **seuls engendrés**.
 
-**Ces deux-là ne sont pas des modèles du Modèle Standard, et ne peuvent pas
-l'être.** Les lignes de Wilson préservent le rang ; SO(10) est de rang 5, le
-groupe du MS de rang 4. Avec |Γ| = 2 on plafonne à Pati–Salam ou SU(5) flipped
-(§5.8). Aller plus loin demande un Γ plus gros — la liste de Braun en offre — ou
-un mécanisme de brisure supplémentaire.
+**Trois réserves, chiffrées :**
+
+1. **§5.34 — 27 couples (CICY, Γ) sur 129 sont à recalculer**, soit 1 224 lignes
+   dont **213 SURVIT (0,6 %)**, parce que `matrice_substitution` était fausse
+   quand Γ permute des facteurs projectifs. Dans les deux sens : un SURVIT peut
+   être usurpé, un éliminé peut l'avoir été à tort. **C'est le premier travail à
+   reprendre.**
+2. **§5.27 — les 8 candidats ℤ₂×ℤ₂ du premier dépouillement sont retirés** :
+   leur relèvement est *projectif* (générateurs anticommutants), l'espace dit
+   « équivariant » n'en était pas un. Les 566 lignes ℤ₂×ℤ₂ ci-dessus sont à lire
+   avec cette réserve.
+3. **Couverture incomplète** : 51 % des réalisations n'ont pas été testées, et
+   2 lots sur 3 716 manquent. Le scan n'est pas un résultat d'absence.
+
+Enfin, un seul maillon manque à ces 33 099 lignes pour être des verdicts
+complets au sens du §2.1 : le critère de Hoppe **suffisant** et la surjectivité
+n'y sont pas repassés candidat par candidat.
+
+### 2.3 La route ℤ₄ — trois générations, stabilité incomplète
+
+Γ cyclique, donc exempt du cocycle du §5.27, et d'ordre 4, donc au-delà du
+plafond Pati–Salam. Sur les trois candidats dont le modèle S/I est exact sur les
+charges b et c (§5.31), après le correctif du §5.34 :
+
+```
+#7745 [1,1,7]  sigma = [1,0,2]        #6947 [1,1,1,1,7]  sigma = [1,0,3,2,4] (x2)
+    lambda = +1, ±i, -1 :  h0(V) equivariant = 0,  h1(V) = 12
+    H1(V) = {+1: 3, i: 3, i3: 3, -1: 3}   ->  3 GENERATIONS
+```
+
+La décomposition est la **représentation régulière**, ce que le théorème
+d'indice impose, et pour les quatre λ. `#6836` (×2) et `#7735` restent hors de
+portée : leur modèle a des classes de Čech manquantes (§5.32).
+
+**Ce qui manque** : ce sont des monades à `rank_C = 2`, et ni `hoppe_sur_espace`
+ni `f_sans_point_base` n'y sont généralisés. h⁰(V) = 0 est démontré, la
+**stabilité complète ne l'est pas** — donc pas encore de verdict SURVIT.
 
 ---
 
@@ -130,11 +185,15 @@ cy_landscape/
     │                          domaine ÉNUMÉRÉ (monotone en max_charge),
     │                          cohomologie par bornes rigoureuses,
     │                          pente : certificat d'instabilité exact
+    ├── symetrie_config.py     Aut(matrice de configuration), orbites (§5.25) [+]
+    ├── cech.py                classes de Čech manquantes, produit (§5.31-32) [+]
     ├── gamma_action.py        action de Γ sur les sections (obsolète, §5.2)
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
 ├── tests_regression.py        42 tests — À LANCER AVANT CHAQUE SCAN
+├── resume_cible.py            dépouillement d'un scan ciblé
+├── diagnostic_par.py          diagnostic du parallélisme (coût, Pool, contexte)
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -2283,11 +2342,10 @@ précisément pourquoi la référence ℤ₂ ne pouvait pas révéler le défaut
 | énumération de `generate_extensions` | **faite** (§5.12) : monotone en `max_charge` par construction, avec plafond `--ext-exhaustif-max` et champ `ext_mode` qui dit, résultat par résultat, si l'énoncé est démontré sur le domaine ou seulement sondé |
 | ligne de Wilson explicite | **non construite** — le §5.8 est de la théorie des groupes appliquée aux nombres calculés ; le code ne manipule aucune ligne de Wilson. La corrélation entre Γ et la ligne de Wilson, qui décide de 2 ou 6 bidoublets de Higgs, reste un intrant |
 | Modèle Standard hors de portée avec ℤ₂ | limitation de **principe** : les lignes de Wilson préservent le rang, SO(10) est de rang 5 et le MS de rang 4 (§5.8). Ces deux candidats plafonnent à Pati–Salam ou SU(5) flipped |
-
 | balayage complet avec Hoppe complet | **fait** (§5.16) : catalogue purgé par la phase des twists (115 → 114), chaîne relancée en entier, mêmes 3 couples survivants. Le §2 tient |
 | surjectivité au rang 5 | **le mur était dans la liste des multidegrés** (§5.17), et le balayage corrigé (§5.18) ramène les indéterminés de 449 à **21**. Reste ouverte, et indépendante de l'équivariance (§4.6), la question « le catalogue contient-il des monades non surjectives ? » |
 | filtre d'indice | **corrigé** (§5.18) : plus de repli silencieux sur tous les groupes, raison persistée, et le verdict porte n_gen(X/Γ). 73 candidats sont écartés explicitement faute de groupe d'ordre compatible |
-| domaine du modèle S/I | 37 candidats sur 108 hors domaine, faute de charges positives, dont `#5452`, `#6826`, `#7745`, `#7669`. Ni retenus ni éliminés. Élargir demande de passer par Koszul plutôt que par le quotient monomial |
+| domaine du modèle S/I | **rouvert en partie** : la contrainte c−b ≥ 0 est relâchée (§5.28, une case nulle de f n'est pas un échec de domaine), et `cech.py` mesure ce qui manque au modèle charge par charge (§5.31). `#7745` et `#6947` sont ainsi passés du statut « hors domaine » à un calcul exact. **Restent** `#6836` et `#7735`, dont les charges portent des classes de Čech, faute du bloc `corr` (§5.32) |
 | `end_V` (nombre de singlets) | **corrigé (§5.19)** : vaut `None`, et ne rapporte plus de points. h¹(End V) reste non calculé |
 | exotiques SO(10) et SU(5) | **corrigé (§5.19)** : `None` au lieu d'un zéro structurel, plus de 25 points gratuits. E₆ conserve son compte réel |
 | Higgs E₆ en mode Wilson | **corrigé (§5.19)** : le 3 codé en dur est supprimé. Le compte avec ligne de Wilson demanderait la décomposition des 27 sous Γ, non calculée |

@@ -2363,12 +2363,34 @@ def t_checkpoint_equivariance_f():
         with open(os.path.join(H, 'results_equivariant.jsonl'), 'w',
                   encoding='utf-8') as f:
             f.writelines(lignes)
-        lance(H, extra=('--arret-apres', '4'))
+        lance(H, extra=('--arret-apres', '6'))
         dstH = os.path.join(H, 'results_equivariance_f.jsonl')
         gardees = open(dstH, encoding='utf-8').readlines()
-        assert len(gardees) > 4, len(gardees)
+
+        # OU COUPER : la reponse est dans le FICHIER, pas dans un ratio.
+        # Le premier jet coupait a la moitie du fichier apres avoir exige
+        # plus de 4 lignes -- ce qui suppose que les lots soient gras. Sur
+        # une machine a 8 coeurs, `imap_unordered` rend d'abord les lots
+        # « aucun groupe compatible », qui n'ecrivent qu'UNE ligne : quatre
+        # lots, quatre lignes, et le test echouait sur un message reduit a
+        # « 4 ». Le nombre de lignes par lot depend de l'ordonnancement.
+        #
+        # Chaque ligne portant son `_lot`, on lit dans le fichier LUI-MEME
+        # quel lot a ete ecrit en dernier et combien de lignes il compte,
+        # puis on lui en retire la moitie. La coupure tombe alors a
+        # l'interieur d'un lot par construction, quel que soit l'ordre dans
+        # lequel les workers ont rendu.
+        assert gardees, "le run interrompu n'a rien ecrit"
+        dernier_lot = json.loads(gardees[-1]).get('_lot')
+        n_dernier = sum(1 for l in gardees
+                        if json.loads(l).get('_lot') == dernier_lot)
+        if n_dernier < 2:
+            return ("volet (b2) non exerce : le dernier lot ecrit ne compte "
+                    "qu'une ligne, impossible de couper a l'interieur")
+        garder = len(gardees) - n_dernier // 2
+        assert 0 < garder < len(gardees), (garder, len(gardees), n_dernier)
         with open(dstH, 'w', encoding='utf-8') as f:
-            f.writelines(gardees[:len(gardees) // 2])   # coupe DANS un lot
+            f.writelines(gardees[:garder])              # coupe DANS un lot
         s_h = lance(H).stdout
         assert 'Checkpoint restreint' in s_h, \
             ("un JSONL ampute n'a pas fait recalculer les lots concernes :\n"

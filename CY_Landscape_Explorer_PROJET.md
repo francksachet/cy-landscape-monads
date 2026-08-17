@@ -1607,10 +1607,21 @@ désormais sur les lignes **triées** : l'ordre n'est pas dans le contrat, le
 multiensemble l'est. Le tri ne relâche rien — une ligne en trop, en moins ou
 différente reste détectée, et les quatre sabotages le confirment.
 
-C'est la deuxième fois que ce test se révèle dépendant de l'environnement : la
-première, il coupait au chronomètre. Un test dont le verdict dépend de la
-machine ne vaut rien, et celui-ci a fallu le corriger deux fois pour qu'il
-n'en dépende plus.
+**Et une troisième fois, dans la foulée.** Le volet « JSONL amputé » coupait le
+fichier *à la moitié* après avoir exigé plus de quatre lignes — ce qui suppose
+les lots gras. Sur 8 cœurs, `imap_unordered` rend d'abord les lots « aucun
+groupe compatible », qui n'écrivent qu'**une** ligne : quatre lots, quatre
+lignes, et le test échouait sur un message réduit à `4`. Le point de coupure est
+maintenant lu **dans le fichier lui-même** — chaque ligne porte son `_lot`, donc
+on sait quel lot a été écrit en dernier et combien de lignes il compte — et si ce
+lot n'en a qu'une, le volet se déclare **non exercé** au lieu de couper au hasard
+en croyant l'avoir fait.
+
+Trois fois, donc, que ce test s'est révélé dépendant de l'environnement : le
+chronomètre, l'ordre des lignes, la grosseur des lots. Chaque fois, la même
+faute de ma part — écrire une vérification qui suppose ce qu'elle observe sur
+*ma* machine. Un test dont le verdict dépend de la machine ne vaut rien, et
+celui-ci a demandé trois corrections pour n'en plus dépendre.
 
 ---
 

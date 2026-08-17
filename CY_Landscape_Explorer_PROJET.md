@@ -2091,6 +2091,68 @@ entière. C'est la troisième étape, avec l'action de Γ.
 
 ---
 
+### 5.33 La borne suffit pour la stabilité — trois candidats ℤ₄ démontrés, et un compteur qui ne tient pas
+
+Le bloc `correction` du §5.32 n'a pas besoin d'être construit pour ce que le
+critère de Hoppe demande. La matrice étant triangulaire par blocs, un vecteur du
+noyau s'écrit (x, y) avec **D y = 0** et **A x + corr·y = 0** :
+
+> si `ker D = 0` alors y = 0, et si `ker A = 0` alors x = 0.
+> Le noyau est nul **quelles que soient les valeurs de `corr`**.
+
+D'où `dim ker f ≤ dim ker A + dim ker D` — concluante quand elle s'annule, muette
+sinon. Jamais de faux positif, un échec qui n'élimine rien : la discipline du
+§5.13.
+
+**Résultat sur les sept candidats ℤ₄**, groupe **cyclique** donc exempt du
+cocycle du §5.27 :
+
+| CICY | classes de Čech (b, c) | ker A | ker D | borne sur h⁰(V) |
+|---|---|---|---|---|
+| **#6826** | 0 | 0 | 0 | **0 — démontré** |
+| **#7745** | 0 | 0 | 0 | **0 — démontré** |
+| **#6947** (×2) | 0 | 0 | 0 | **0 — démontré** |
+| #6836 (×2) | 12 | 0 | 2 | 2 — non concluant |
+| #7735 | 2 | 0 | 2 | 2 — non concluant |
+
+Sur trois d'entre eux, **le modèle n'avait aucune classe manquante sur les charges
+b et c** : il était déjà exact là où ça compte, et h⁰(V) = 0 est établi. À λ = ±1
+seulement — les deux autres relèvements donnent h⁰ = 5 ou 8, donc **le test mord**.
+
+Ce sont les premiers candidats d'ordre 4 sans cocycle dont la stabilité
+équivariante soit démontrée plutôt que supposée.
+
+**Mais le nombre de générations ne tient pas.** Sur #7745 et #6947, où H¹(V) est
+bien le conoyau (h¹(B) = 0 certifié) et où rien ne manque au modèle, la
+décomposition sous ℤ₄ donne :
+
+```
+    lambda = +1 : h1(V) = 12,  {+1: 4,  i: 1,  i^3: 1,  -1: 6}   -> invariant 4
+    lambda = -1 : h1(V) = 12,  {+1: 3,  i: 2,  i^3: 2,  -1: 5}   -> invariant 3
+```
+
+Les deux somment bien à 12, et le contrôle de semi-simplicité passe. Mais
+l'indice impose **|χ|/|Γ| = 12/4 = 3** générations sur le quotient, et h⁰ comme h²
+sont nuls : **la partie invariante doit valoir 3**. λ = −1 le donne, λ = +1 donne
+**4**.
+
+L'un des deux contredit le théorème d'indice. J'ai vérifié que ce n'est pas
+l'ordre projectif — les valeurs propres sont désormais lues sur l'opérateur
+(`ordre_projectif`) et non supposées racines de l'unité, ce qui ne change pas le
+résultat. La convention reliant le twist λ de f à l'action induite sur le conoyau
+reste donc à établir pour Γ non ℤ₂.
+
+> Le §5.6 avait validé le cas ℤ₂ parce que 3 + 3 y était **forcé** : toute autre
+> répartition aurait sauté aux yeux. En ℤ₄, 4+1+1+6 ne heurte rien de visible —
+> il a fallu confronter à l'indice pour voir que ça cloche. C'est le même angle
+> mort que la note « (1,1,1) reste incohérent » du test isotypique, et il est
+> maintenant chiffré.
+
+**État net** : la stabilité de trois candidats ℤ₄ est acquise, leur contenu en
+générations ne l'est pas.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |

@@ -265,3 +265,82 @@ def matrice_produit(base_src, base_dst, polynome):
 # regle monomiale : il vient de la differentielle de Koszul. C'est lui qui
 # reste a construire, et c'est le seul endroit du chantier dont je ne
 # puisse pas dire d'avance qu'il tombe juste.
+
+
+# ======================================================================
+# Le bloc diagonal de Cech pour une monade, et la borne qu'il donne
+# ======================================================================
+#
+# POURQUOI UNE BORNE SUFFIT
+# -------------------------
+# La matrice de f sur H^0(Y) est triangulaire par blocs dans la base
+# (ordinaire, Cech) :
+#
+#     [ A   corr ]        A : ordinaire -> ordinaire
+#     [ 0    D   ]        D : Cech      -> Cech
+#
+# Un vecteur du noyau s'ecrit (x, y) avec D y = 0 et A x + corr.y = 0.
+# Si ker D = 0 alors y = 0, et si ker A = 0 alors x = 0 : le noyau est nul
+# QUELLES QUE SOIENT les valeurs de `corr`. D'ou
+#
+#     dim ker f  <=  dim ker A + dim ker D
+#
+# et les deux blocs diagonaux suffisent a DEMONTRER h^0(V) = 0 -- ce que
+# demande le critere de Hoppe, qui ne veut pas la valeur de h^0 mais sa
+# nullite.
+#
+# La borne est donc concluante quand elle s'annule, et ne conclut rien
+# sinon : jamais de faux positif, un echec qui n'elimine pas. C'est la
+# meme discipline que les bornes de `monad_wedge` ou le certificat de
+# pente du §5.13.
+#
+# CE QU'ELLE NE DONNE PAS : la DIMENSION de H^1(V), donc le nombre de
+# generations. Celui-la exige `corr`, qui n'est pas construit.
+
+def bloc_cech_monade(ambient, config, b_charges, c_charges, polys, p):
+    """
+    Le bloc D : Cech(B) -> Cech(C), et son noyau modulo p.
+
+    `polys[(j, i)]` : le polynome f_{j,i}, sous forme de liste de
+    (coefficient, monome), le monome au format de `basis_multi`. Une case
+    absente vaut zero.
+
+    Rend {'dim_source': , 'dim_but': , 'rang': , 'noyau': , 'base_src': }.
+    """
+    import numpy as np
+    from cy_landscape.core.sections import rref_mod
+
+    src, dst = [], []
+    for i, b in enumerate(b_charges):
+        for S, w in base_classes_manquantes(ambient, config, b):
+            src.append((i, S, w))
+    for j, c in enumerate(c_charges):
+        for S, w in base_classes_manquantes(ambient, config, c):
+            dst.append((j, S, w))
+    if not src:
+        return {'dim_source': 0, 'dim_but': len(dst), 'rang': 0,
+                'noyau': 0, 'base_src': []}
+    index = {k: n for n, k in enumerate(dst)}
+
+    M = np.zeros((len(dst), len(src)), dtype=np.int64)
+    for n, (i, S, w) in enumerate(src):
+        for j in range(len(c_charges)):
+            for coef, mon in polys.get((j, i), ()):
+                r = produit_classe(w, mon)
+                if r is None:
+                    continue
+                # Le sous-ensemble S de Koszul est INCHANGE par le produit :
+                # multiplier ne fait pas passer d'un cran de la resolution a
+                # un autre. Si la classe produite n'est pas dans la base
+                # cible, c'est une incoherence de degres, pas un cas a
+                # ignorer.
+                cible = index.get((j, S, r))
+                if cible is None:
+                    raise KeyError(f"classe hors base cible : {(j, S, r)}")
+                M[cible, n] = (M[cible, n] + int(coef)) % p
+    if len(dst) == 0:
+        return {'dim_source': len(src), 'dim_but': 0, 'rang': 0,
+                'noyau': len(src), 'base_src': src}
+    rang, _ = rref_mod(M.T.copy(), p)
+    return {'dim_source': len(src), 'dim_but': len(dst), 'rang': int(rang),
+            'noyau': len(src) - int(rang), 'base_src': src}

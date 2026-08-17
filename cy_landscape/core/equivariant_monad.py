@@ -972,8 +972,8 @@ def decomposition_h1_V(anneau, ambient, b_charges, c_charges, coord_mats,
     from cy_landscape.core.sections import _mult_matrix
     if len(coord_mats) != 1:
         return None                    # ce chemin ne traite que Gamma cyclique
-    if valeurs is None:
-        valeurs = [1, p - 1]           # Z2
+    # `valeurs` reste optionnel : None = les lire sur l'operateur (voir
+    # plus bas), ce qui traite les relevements projectifs.
 
     # RANK_C QUELCONQUE. La cible n'est plus R_c mais la SOMME DIRECTE
     # (+)_j R_{c_j}, et Gamma peut PERMUTER les facteurs : l'operateur n'est
@@ -1023,6 +1023,22 @@ def decomposition_h1_V(anneau, ambient, b_charges, c_charges, coord_mats,
         T[depart[jj]:depart[jj] + dimc[jj],
           depart[j]:depart[j] + dimc[j]] = A
     T %= p
+
+    # LES VALEURS PROPRES SE LISENT SUR L'OPERATEUR, pas sur l'ordre du
+    # groupe. Si T^n = c.Id avec c != 1 -- relevement projectif --, les
+    # valeurs propres sont les racines n-iemes de c, et non de 1. Passer
+    # `racines_niemes(1, 4, p)` pour un Z4 dont la constante vaut autre
+    # chose donne des multiplicites qui somment quand meme a la dimension
+    # (le controle `coherent` ne le voit pas) mais decrivent une autre
+    # decomposition : sur les candidats Z4, cela donnait une partie
+    # invariante de 4 la ou l'indice en impose 3.
+    if valeurs is None:
+        n_proj, c_proj = ordre_projectif(T, p)
+        if n_proj is None:
+            return None
+        valeurs = racines_niemes(c_proj, n_proj, p)
+        if not valeurs:
+            return None
 
     tot = multiplicites_propres(T, p, valeurs)
     sur_W = multiplicites_propres(T, p, valeurs, base=W)

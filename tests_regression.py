@@ -2644,6 +2644,104 @@ def t_domaine_case_nulle():
 
 
 # ======================================================================
+# Ou passent les sections que le modele S/I ne voit pas
+# ======================================================================
+
+@test("analyse_modele : critere suffisant valide, et la diagonale complete")
+def t_analyse_modele():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    `domaine_valide` certifiait le h^0 de Koszul sans jamais verifier que
+    dim(S_a/I_a) lui soit egal (§5.29). `analyse_modele` fournit le critere
+    manquant : h^0(Y) recoit TOUTE la diagonale q = p de la suite spectrale
+    d'hypercohomologie, et le modele n'est exact que si cette diagonale est
+    vide au-dela de (0, 0).
+
+    Le test verifie la direction qui SERT -- `modele_exact` est une
+    condition SUFFISANTE de fiabilite -- et non l'egalite generale, qui est
+    fausse : au-dela du critere, `naif + manquant` n'est qu'une BORNE
+    SUPERIEURE, les differentielles superieures pouvant tuer des termes.
+    Mesure : 130/144 d'accord, les 14 ecarts tous par exces.
+
+    Trois volets :
+      (a) modele_exact => dim(S/I) == h^0 certifie, sur un echantillon ;
+      (b) le cas connu #6836 est signale, avec les bons termes ;
+      (c) tronquer la diagonale rate des charges -- c'est le defaut qu'on
+          mesure, on ne va pas le reintroduire dans l'outil qui le mesure.
+    """
+    import random
+    from cy_landscape.core.sections import analyse_modele, get_ring
+    from cy_landscape.core.exact_cohomology import koszul_cohomology_ex
+    from cy_landscape.data.parse_oxford import load_oxford_file
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    lst = os.path.join(base, 'cicylist.txt')
+    if not os.path.exists(lst):
+        return "ignore : cicylist.txt absent"
+    ents = load_oxford_file(lst)
+    E = {e['num']: e for e in ents}
+
+    # --- (b) le cas connu, d'abord : il fixe ce que le test mesure -------
+    e = E[6836]
+    amb, cfg = e['ambient'], np.asarray(e['config'])
+    A = analyse_modele(amb, cfg, [0, 0, 0, 0, 1])
+    assert not A['modele_exact'], "le cas de reference n'est plus signale"
+    assert A['manquant'] == 4, (A['manquant'], "attendu 4 classes manquantes")
+    assert A['exact'] == 8, (A['exact'], "h^0(Y) attendu 8")
+    assert all(t[0] == 1 for t in A['termes']), A['termes']
+    assert analyse_modele(E[6890]['ambient'], np.asarray(E[6890]['config']),
+                          [0, 1, 3, 1, 0])['modele_exact'],         "#6890 devrait etre dans le modele : le critere rejette tout"
+
+    # --- (a) la direction qui sert --------------------------------------
+    random.seed(1)
+    n_ok = n_susp = 0
+    for ee in random.sample(ents, 90):
+        amb, cfg = ee['ambient'], np.asarray(ee['config'])
+        if len(amb) > 6:
+            continue
+        anneau = None
+        for _ in range(6):
+            a = [random.randint(0, 3) for _ in range(len(amb))]
+            r = koszul_cohomology_ex(amb, cfg, a)
+            if not r['certified_by_degree'][0]:
+                continue
+            res = analyse_modele(amb, cfg, a)
+            if not res['modele_exact']:
+                n_susp += 1
+                assert res['exact'] >= r[0],                     (ee['num'], a, res['exact'], r[0],
+                     "naif + manquant n'est meme pas une borne superieure")
+                continue
+            if anneau is None:
+                anneau = get_ring(amb, cfg)
+            assert anneau.dimY(list(a)) == r[0],                 (ee['num'], a, anneau.dimY(list(a)), r[0],
+                 "charge declaree DANS le modele alors que dim(S/I) != h^0 : "
+                 "le critere ne protege pas")
+            n_ok += 1
+    assert n_ok >= 30 and n_susp >= 5, (n_ok, n_susp,
+        "echantillon trop pauvre : le test ne verrait ni les cas sains ni "
+        "les cas signales")
+
+    # --- (c) tronquer la diagonale ---------------------------------------
+    # #7293 recoit sa contribution en p = 5. Un outil qui s'arreterait a
+    # p = 3 la declarerait « dans le modele » -- exactement la faute mesuree.
+    e7 = E[7293]
+    a7 = [2, 3, 3, 0, 0]
+    plein = analyse_modele(e7['ambient'], np.asarray(e7['config']), a7)
+    tronque = analyse_modele(e7['ambient'], np.asarray(e7['config']), a7,
+                             p_max=3)
+    assert not plein['modele_exact'] and tronque['modele_exact'],         (plein['manquant'], tronque['manquant'],
+         "le cas cense distinguer diagonale complete et tronquee ne le fait "
+         "plus")
+    assert plein['exact'] == koszul_cohomology_ex(
+        e7['ambient'], np.asarray(e7['config']), a7)[0], plein
+
+    return (f"{n_ok} charges dans le modele, toutes verifiees dim(S/I) = h0 ; "
+            f"{n_susp} signalees, borne superieure tenue ; #6836 : 4 classes "
+            f"manquantes en p=1 ; #7293 : contribution en p=5")
+
+
+# ======================================================================
 
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith('t_')]

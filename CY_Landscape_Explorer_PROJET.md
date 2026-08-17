@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 37 tests.
+> non une propriété des candidats, et la suite compte 38 tests.
 
 ---
 
@@ -134,7 +134,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        37 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        38 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -1905,6 +1905,70 @@ vraiment H⁰(Y, ·) — reste à prendre, les yeux sur les cinq tests concerné
 
 ---
 
+### 5.30 Où passent les sections manquantes — le critère exact, et ce qu'il reste à construire
+
+Le §5.29 constate que le modèle S_a/I_a sous-compte. Voici **d'où** viennent les
+sections qu'il ignore, et donc ce qu'il faudrait construire pour les représenter.
+
+La résolution de Koszul de O_Y(a) sur l'ambiant A donne la suite spectrale
+d'hypercohomologie
+
+```
+    E1^{-p,q} = H^q(A, ^p)  ==>  H^{q-p}(Y, O(a))
+```
+
+où ∧^p = ⊕_{|S|=p} O_A(a − Σ_{k∈S} d_k). **H⁰(Y) reçoit toute la diagonale
+q = p**, pas seulement le coin (0, 0) :
+
+```
+    h0(Y, O(a)) = [ ligne q = 0 : ce que le modele represente ]
+                + [ somme_{p >= 1} des termes q = p : ce qu'il ignore ]
+```
+
+**Le cas #6836, charge (0,0,0,0,1)** — quatre termes p = 1 de la forme
+b = (0,0,0,−2,0) : un facteur P¹ en degré −2, donc H¹(P¹, O(−2)) = 1 chacun.
+Quatre classes, qui portent h⁰ de 4 à 8.
+
+**Ce que ces classes sont** : pas des monômes de l'anneau ambiant, mais des
+classes de Čech, du type g_k /(x_j y_j) modulo la relation de Koszul.
+
+`analyse_modele(ambient, config, a)` rend `{naif, manquant, exact, termes,
+modele_exact}`.
+
+**Validé, et dans la seule direction qui serve.** `modele_exact` est une
+condition **suffisante** de fiabilité : sur l'échantillon, **54 charges déclarées
+dans le modèle, 54 fois dim(S/I) = h⁰, zéro contre-exemple**. Au-delà du critère,
+`naif + manquant` n'est qu'une **borne supérieure** — les différentielles
+supérieures peuvent tuer des termes, et 14 écarts sur 144 le montrent, tous par
+excès. Le dire est le point : un critère suffisant qui se présenterait comme une
+égalité serait la même faute que celle du §5.29.
+
+**Deux pièges rencontrés en l'écrivant**, tous deux des troncatures :
+
+| | ce qui manquait |
+|---|---|
+| ligne q = 0 arrêtée à p = 1 | suppose ⊕ₖH⁰(a−d_k) → H⁰(a) **injective** — faux dès qu'il y a des syzygies. 17 désaccords sur 80 |
+| diagonale plafonnée à p = 3 | #7293 reçoit sa contribution en **p = 5**, terme de tête, dual de Serre. Tronquer la diagonale, c'est reproduire le défaut qu'on mesure |
+
+**Ce qui reste à construire, et c'est le vrai travail.** Corriger `dimY` ne sert
+à rien seul : les consommateurs ont besoin de la **multiplication**
+H⁰(O(a)) ⊗ H⁰(O(b)) → H⁰(O(a+b)) et de l'**action de Γ**, sur les classes de
+Čech comme sur les monômes. Il faut donc
+
+1. une base explicite des classes de Čech contribuant à chaque charge —
+   accessible : ce sont des produits de Künneth de monômes et de classes
+   H^{n_i}(P^{n_i}, O(d)) à base monomiale négative (Bott) ;
+2. le produit de Čech H¹ × H⁰ → H¹, et la reconnaissance du cas où le produit
+   redevient une section ordinaire (différentielle de Koszul) ;
+3. l'action de Γ sur ces classes, qui permute les facteurs et les Koszul.
+
+Tant que ce n'est pas fait, `modele_exact` doit **écarter** les charges
+concernées plutôt que de les traiter dans un modèle qui les sous-compte — mais
+poser ce filtre fait tomber cinq tests de non-régression (§5.29), et cette
+révision-là reste à mener.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -1971,7 +2035,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 37 tests, ~4 min. À lancer après chaque modification,
+**`tests_regression.py` — 38 tests, ~4 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique

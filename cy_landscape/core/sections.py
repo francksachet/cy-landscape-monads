@@ -339,6 +339,91 @@ def domaine_valide(ambient, config, b_charges, c_charges, rank_c_max=1):
     return True
 
 
+def analyse_modele(ambient, config, a, p_max=None):
+    """
+    Ou passent les sections que le modele S_a / I_a ne voit pas.
+
+    ----------------------------------------------------------------------
+    Le diagnostic
+    ----------------------------------------------------------------------
+    La resolution de Koszul de O_Y(a) sur l'espace ambiant A donne la suite
+    spectrale d'hypercohomologie
+
+        E_1^{-p, q} = H^q(A, /\^p)  ==>  H^{q-p}(Y, O(a))
+
+    ou /\^p = (+)_{|S| = p} O_A(a - sum_{k in S} d_k). H^0(Y) recoit donc
+    TOUS les termes de la diagonale q = p, et non le seul (0, 0) :
+
+        h^0(Y, O(a)) = dim coker( (+)_k H^0(a - d_k) -> H^0(a) )   <- le modele
+                     + somme_{p >= 1} dim H^p(A, /\^p)             <- ce qu'il ignore
+
+    Le modele S_a / I_a n'est donc exact que si la seconde somme est nulle.
+    C'est precisement ce que `domaine_valide` ne verifiait pas (§5.29).
+
+    ----------------------------------------------------------------------
+    Ce que ces sections manquantes SONT
+    ----------------------------------------------------------------------
+    Sur #6836 (A = P1^4 x P3), la charge (0,0,0,0,1) donne quatre termes
+    p = 1 de la forme b = (0,0,0,-2,0) : un facteur P1 en degre -2, donc
+    H^1(P1, O(-2)) = 1 chacun. Quatre classes, qui portent h^0 de 4 a 8.
+    Ce ne sont pas des monomes de l'anneau ambiant -- ce sont des classes de
+    Cech, du type g_k / (x_j y_j) modulo la relation de Koszul. Les
+    representer explicitement, et savoir les MULTIPLIER, est le travail qui
+    reste : `dimY` seul ne suffit pas, il faut aussi `_mult_matrix` et
+    l'action de Gamma sur ces classes.
+
+    Cette fonction ne fait donc pas l'extension : elle en donne la
+    SPECIFICATION, exacte et verifiable, et dit pour chaque charge combien
+    de sections manquent et d'ou elles viennent.
+
+    Renvoie {'naif': , 'manquant': , 'exact': , 'termes': [(p, S, b, dim)],
+             'modele_exact': bool}.
+    """
+    from itertools import combinations
+    from cy_landscape.core.exact_cohomology import h_ambient
+    cfg = [list(r) for r in config]
+    K = len(cfg)
+    m = len(ambient)
+    a = list(a)
+
+    # Part que le modele represente : le conoyau de la LIGNE q = 0 du
+    # complexe de Koszul, c'est-a-dire sa somme alternee COMPLETE
+    #
+    #     somme_p (-1)^p h^0(A, /\^p)
+    #
+    # et non h^0(a) - somme_k h^0(a - d_k). Le premier jet s'arretait au
+    # terme p = 1, ce qui suppose la fleche (+)_k H^0(a-d_k) -> H^0(a)
+    # INJECTIVE : elle ne l'est pas des qu'il y a des syzygies, et la
+    # verification sur 80 charges tirees au hasard le montrait aussitot
+    # (17 desaccords, tous a `manquant` nul, donc imputables a cette
+    # troncature et non aux classes de Cech).
+    naif = 0
+    for pp in range(K + 1):
+        sous = 0
+        for S in combinations(range(K), pp):
+            b = [a[i] - sum(cfg[k][i] for k in S) for i in range(m)]
+            sous += h_ambient(ambient, b).get(0, 0)
+        naif += ((-1) ** pp) * sous
+
+    # p_max = K par defaut, et ce n'est pas un detail : les premieres
+    # verifications le plafonnaient a 3 et manquaient 17 charges sur 80,
+    # dont les contributions venaient de p = 4 et p = 5 -- les termes de
+    # TETE du complexe, duaux de Serre. Tronquer la diagonale, c'est
+    # retrouver le defaut qu'on est en train de mesurer.
+    if p_max is None:
+        p_max = K
+    termes, manquant = [], 0
+    for pp in range(1, min(p_max, K) + 1):
+        for S in combinations(range(K), pp):
+            b = [a[i] - sum(cfg[k][i] for k in S) for i in range(m)]
+            d = h_ambient(ambient, b).get(pp, 0)
+            if d:
+                termes.append((pp, S, tuple(b), d))
+                manquant += d
+    return {'naif': naif, 'manquant': manquant, 'exact': naif + manquant,
+            'termes': termes, 'modele_exact': manquant == 0}
+
+
 def charges_hors_modele(ambient, config, charges):
     """
     Charges ou dim(S_a / I_a) != h^0(Y, O(a)) alors que h^0 est CERTIFIE.

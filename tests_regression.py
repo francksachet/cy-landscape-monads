@@ -2777,6 +2777,107 @@ def t_analyse_modele():
 
 
 # ======================================================================
+# Base des classes de Cech manquantes
+# ======================================================================
+
+@test("base de Cech : cardinal == manquant, Kunneth == Bott, exposants negatifs")
+def t_base_cech():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    `analyse_modele` COMPTE les sections que S_a/I_a ne voit pas (§5.30) ;
+    `base_classes_manquantes` en construit une BASE. Tant que la
+    multiplication et l'action de Gamma ne sont pas ecrites, l'enumeration
+    est tout ce qu'on a -- et une enumeration fausse ne se verrait nulle
+    part ailleurs.
+
+    Quatre volets, dont trois confrontent le module a un calcul
+    INDEPENDANT deja present dans le depot :
+
+      (a) les briques de Bott, sur des valeurs connues a la main ;
+      (b) `cardinal_hq` (Kunneth explicite) contre `h_ambient`, qui calcule
+          les memes dimensions par un autre chemin ;
+      (c) |base| == `manquant`, sur un echantillon ;
+      (d) le cas de reference #6836 : quatre classes, chacune portant des
+          exposants NEGATIFS sur exactement un facteur P^1. C'est ce qui
+          distingue une classe de Cech d'une section ordinaire -- une base
+          entierement positive signalerait qu'on a construit autre chose.
+    """
+    import random
+    from cy_landscape.core.cech import (base_classes_manquantes, cardinal_hq,
+                                        monomes_positifs, monomes_negatifs,
+                                        base_hq_facteur)
+    from cy_landscape.core.sections import analyse_modele
+    from cy_landscape.core.exact_cohomology import h_ambient
+    from cy_landscape.data.parse_oxford import load_oxford_file
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    lst = os.path.join(base, 'cicylist.txt')
+    if not os.path.exists(lst):
+        return "ignore : cicylist.txt absent"
+    ents = load_oxford_file(lst)
+    E = {e['num']: e for e in ents}
+
+    # --- (a) les briques -----------------------------------------------
+    from math import comb
+    for n in (1, 2, 3):
+        for d in range(0, 4):
+            assert len(monomes_positifs(n, d)) == comb(d + n, n), (n, d)
+            assert all(sum(x) == d and all(v >= 0 for v in x)
+                       for x in monomes_positifs(n, d)), (n, d)
+        for d in range(-6, -n):
+            attendu = comb(-d - 1, n) if d <= -n - 1 else 0
+            got = monomes_negatifs(n, d)
+            assert len(got) == attendu, (n, d, len(got), attendu)
+            assert all(sum(x) == d and all(v <= -1 for v in x)
+                       for x in got), (n, d)
+    assert monomes_negatifs(1, -2) == [(-1, -1)], monomes_negatifs(1, -2)
+    # hors des deux cas de Bott, rien -- sinon Kunneth compterait des
+    # facteurs fantomes
+    assert base_hq_facteur(2, -2, 0) == [] and base_hq_facteur(2, -2, 2) == []
+
+    # --- (b) et (c) : contre des calculs independants -------------------
+    random.seed(2)
+    n_card = n_base = 0
+    for ee in random.sample(ents, 60):
+        amb, cfg = ee['ambient'], np.asarray(ee['config'])
+        m = len(amb)
+        if m > 6:
+            continue
+        for _ in range(5):
+            a = [random.randint(0, 3) for _ in range(m)]
+            assert len(base_classes_manquantes(amb, cfg, a)) == \
+                analyse_modele(amb, cfg, a)['manquant'], (ee['num'], a)
+            n_base += 1
+            for q in (0, 1, 2):
+                b = [a[i] - random.randint(0, 2) for i in range(m)]
+                assert cardinal_hq(amb, b, q) == h_ambient(amb, b).get(q, 0), \
+                    (ee['num'], b, q, "Kunneth explicite != h_ambient")
+                n_card += 1
+    assert n_base >= 100 and n_card >= 300, (n_base, n_card)
+
+    # --- (d) le cas de reference ---------------------------------------
+    e = E[6836]
+    B = base_classes_manquantes(e['ambient'], np.asarray(e['config']),
+                                [0, 0, 0, 0, 1])
+    assert len(B) == 4, len(B)
+    assert all(len(S) == 1 for S, _ in B), [S for S, _ in B]
+    for S, w in B:
+        negs = [i for i, exp in enumerate(w) if any(v < 0 for v in exp)]
+        assert len(negs) == 1, (S, w, "attendu UN facteur a exposants negatifs")
+        assert w[negs[0]] == (-1, -1), (S, w, "attendu 1/(x y) sur un P^1")
+    # les quatre portent leur classe sur des facteurs DIFFERENTS : une base
+    # qui les mettrait toutes au meme endroit serait degeneree
+    places = {next(i for i, exp in enumerate(w) if any(v < 0 for v in exp))
+              for _, w in B}
+    assert len(places) == 4, places
+
+    return (f"{n_base} charges : |base| == manquant ; {n_card} dimensions "
+            f"Kunneth == h_ambient ; #6836 : 4 classes 1/(x y) sur 4 facteurs "
+            f"P^1 distincts")
+
+
+# ======================================================================
 
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith('t_')]

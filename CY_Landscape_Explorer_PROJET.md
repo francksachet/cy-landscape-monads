@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 38 tests.
+> non une propriété des candidats, et la suite compte 39 tests.
 
 ---
 
@@ -134,7 +134,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        38 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        39 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -1995,6 +1995,48 @@ révision-là reste à mener.
 
 ---
 
+### 5.31 Les classes manquantes, construites — première des trois étapes
+
+Le §5.30 dit **combien** de sections le modèle ignore et **d'où** elles viennent.
+`cech.py` en construit maintenant la **base**.
+
+Une classe manquante est un couple **(S, w)** : un sous-ensemble S de p équations,
+et un élément w de la base de H^p(A, O(a − Σ_{k∈S} d_k)) — lui-même un produit de
+Künneth où chaque facteur projectif porte soit un monôme ordinaire (q_i = 0), soit
+un **monôme négatif**, exposants tous ≤ −1 (q_i = n_i, Bott).
+
+Sur **#6836, charge (0,0,0,0,1)**, la base sort telle que la théorie l'annonce :
+
+```
+  S=(0,)  ((0,0), (0,0), (0,0), (-1,-1), (0,0,0,0))
+  S=(1,)  ((0,0), (-1,-1), (0,0), (0,0),  (0,0,0,0))
+  S=(2,)  ((0,0), (0,0), (-1,-1), (0,0),  (0,0,0,0))
+  S=(3,)  ((-1,-1), (0,0), (0,0), (0,0),  (0,0,0,0))
+```
+
+Quatre classes, chacune **1/(x y) sur un P¹ différent** — les quatre qui portent
+h⁰ de 4 à 8. Ce ne sont pas des monômes de l'anneau ambiant, et c'est exactement
+pour cela que S/I ne les voyait pas.
+
+**Validé contre deux calculs indépendants déjà présents dans le dépôt** :
+
+| | résultat |
+|---|---|
+| \|base\| == `manquant` d'`analyse_modele` | **145 charges, 145 d'accord** |
+| `cardinal_hq` (Künneth explicite) == `h_ambient` | **435 dimensions, 435 d'accord** |
+
+Le 39ᵉ test vérifie en outre que les exposants sont bien **négatifs sur exactement
+un facteur** et que les quatre classes de #6836 sont portées par quatre facteurs
+**distincts** : une base entièrement positive, ou concentrée au même endroit,
+signalerait qu'on a construit autre chose que ce qu'on croit.
+
+**Restent les deux étapes qui mordent** : le produit de Čech H¹ × H⁰ → H¹, avec la
+reconnaissance du cas où le produit redevient une section ordinaire ; puis l'action
+de Γ, qui permute à la fois les facteurs projectifs et les générateurs de Koszul.
+C'est là que les candidats ℤ₄ redeviendront calculables — pas avant.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -2061,7 +2103,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 38 tests, ~4 min. À lancer après chaque modification,
+**`tests_regression.py` — 39 tests, ~4 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique

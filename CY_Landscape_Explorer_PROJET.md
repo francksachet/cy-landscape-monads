@@ -1597,6 +1597,21 @@ Quatre sabotages le font échouer : troncature retirée, garde d'empreinte
 neutralisée, garde qui refuse *tout* (elle est alors prise par « le lot n'avance
 pas entre deux coupures »), et ouverture du JSONL en `'w'` au lieu de `'a'`.
 
+**Un cinquième piège, découvert sur la machine de Franck et pas sur la mienne.**
+Le test comparait les lignes **en ordre de fichier**. Or depuis la version
+parallèle, `imap_unordered` rend les lots dans l'ordre où ils finissent — qui
+dépend du nombre de cœurs. Sur 8 cœurs le test échouait avec
+« reprise infidèle : **30 lignes contre 30** », deux runs ayant produit
+exactement les mêmes lignes dans un ordre différent. La comparaison se fait
+désormais sur les lignes **triées** : l'ordre n'est pas dans le contrat, le
+multiensemble l'est. Le tri ne relâche rien — une ligne en trop, en moins ou
+différente reste détectée, et les quatre sabotages le confirment.
+
+C'est la deuxième fois que ce test se révèle dépendant de l'environnement : la
+première, il coupait au chronomètre. Un test dont le verdict dépend de la
+machine ne vaut rien, et celui-ci a fallu le corriger deux fois pour qu'il
+n'en dépende plus.
+
 ---
 
 ### 5.25 Replier les orbites : facteur 4, et le contrôle qui empêche que ce soit un §5.23 de plus

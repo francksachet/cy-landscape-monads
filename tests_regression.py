@@ -2243,9 +2243,22 @@ def t_checkpoint_equivariance_f():
         return subprocess.run(cmd, capture_output=True, text=True, cwd=base)
 
     def contenu(dossier):
+        """Les lignes du JSONL, TRIEES.
+
+        L'ordre des lignes n'est pas dans le contrat : depuis la version
+        parallele, `imap_unordered` rend les lots dans l'ordre ou ils
+        finissent, qui depend du nombre de coeurs et de l'alea
+        d'ordonnancement. Comparer en ordre de fichier faisait echouer le
+        test sur une machine a 8 coeurs -- « 30 lignes contre 30 » -- alors
+        que les deux runs avaient produit exactement les memes lignes.
+
+        Le tri ne relache rien : deux multiensembles egaux, c'est bien
+        « memes lignes, memes multiplicites ». Une ligne en trop, en moins
+        ou differente reste detectee.
+        """
         p = os.path.join(dossier, 'results_equivariance_f.jsonl')
-        return [json.dumps(json.loads(l), sort_keys=True)
-                for l in open(p, encoding='utf-8') if l.strip()]
+        return sorted(json.dumps(json.loads(l), sort_keys=True)
+                      for l in open(p, encoding='utf-8') if l.strip())
 
     tmp = tempfile.mkdtemp(prefix='cktest_')
     try:

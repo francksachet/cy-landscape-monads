@@ -2572,6 +2572,78 @@ def t_repli_orbites():
 
 
 # ======================================================================
+# Domaine : une case f nulle n'est pas une sortie de domaine
+# ======================================================================
+
+@test("domaine : c-b negatif admis (case nulle), le reste toujours exige")
+def t_domaine_case_nulle():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    `domaine_valide` exigeait que TOUTES les charges soient positives, y
+    compris les degres c_j - b_i qui sont les CASES de la matrice f. Or une
+    case de degre negatif signifie H^0(O(c_j - b_i)) = 0 : la case est
+    identiquement nulle. Toute la machinerie le traite deja ainsi --
+    `espace_f_equivariant` calcule `actif = all(x >= 0 ...)`,
+    `h0_V_generique` insere un bloc de zeros, `decomposition_h1_V` saute les
+    cases absentes de `offsets`. La condition etait donc PLUS STRICTE que ce
+    que le code consommateur demande.
+
+    Cout mesure : les SEPT candidats du catalogue portant un groupe Z4 --
+    cyclique, d'ordre 4, donc la seule route vers le rang 4 exempte du
+    cocycle du §5.27 -- etaient tous ecartes « hors domaine » pour UNE case
+    negative chacun, les 36 autres charges etant certifiees.
+
+    Le test verifie les deux sens, faute de quoi il ne prouverait rien :
+
+      (a) une case c-b negative ne fait plus sortir du domaine ;
+      (b) une charge NEGATIVE AILLEURS -- un b_i, un c_j, un b_i+b_j, un
+          c+b -- fait toujours echouer. Ce sont celles qui doivent PORTER
+          des sections ; les admettre viderait le controle de son sens.
+    """
+    from cy_landscape.core.sections import domaine_valide
+    from cy_landscape.data.parse_oxford import load_oxford_file
+
+    base = os.path.dirname(os.path.abspath(__file__))
+    lst = os.path.join(base, 'cicylist.txt')
+    if not os.path.exists(lst):
+        return "ignore : cicylist.txt absent"
+    E = {e['num']: e for e in load_oxford_file(lst)}
+
+    # Cas reel : #7735, un des sept candidats Z4. B = 2xe0 + 2xe1 + e2,
+    # C = (1,1,0) et (1,1,1) ; la case (1,1,0) - (0,0,1) = (1,1,-1) est
+    # negative, et c'est la seule.
+    e = E[7735]
+    amb, cfg = e['ambient'], np.asarray(e['config'])
+    b = [[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 1, 0], [0, 0, 1]]
+    c = [[1, 1, 0], [1, 1, 1]]
+    neg = [[c[j][k] - b[i][k] for k in range(3)]
+           for j in range(len(c)) for i in range(len(b))]
+    n_neg = sum(1 for d in neg if any(v < 0 for v in d))
+    assert n_neg == 1, (n_neg, "le cas de reference n'a plus une seule case "
+                               "negative : le test ne porte plus sur ce qu'il croit")
+    assert domaine_valide(amb, cfg, b, c, rank_c_max=None),         ("une case f nulle fait encore sortir du domaine : les candidats Z4 "
+         "restent inaccessibles")
+
+    # (b) le controle mord toujours ailleurs. On rend negatif, tour a tour,
+    # un b_i puis un c_j : les deux doivent echouer.
+    b2 = [list(x) for x in b]; b2[0] = [-1, 0, 0]
+    assert not domaine_valide(amb, cfg, b2, c, rank_c_max=None),         "un b_i negatif est accepte : le controle ne protege plus rien"
+    c2 = [list(x) for x in c]; c2[0] = [1, -1, 0]
+    assert not domaine_valide(amb, cfg, b, c2, rank_c_max=None),         "un c_j negatif est accepte : le controle ne protege plus rien"
+
+    # (c) et un cas ou TOUTES les cases sont negatives doit encore passer le
+    # test de signe -- c'est une matrice f nulle, donc un cas degenere, mais
+    # ce n'est pas au domaine de le rejeter : `check_monad_nondegenerate`
+    # s'en charge, et confondre les deux roles cacherait l'un des deux.
+    from cy_landscape.core.monads import MonadBundle, check_monad_nondegenerate
+    ok_nd, motif = check_monad_nondegenerate(MonadBundle(b, [c[0]]))
+    return (f"#7735 : 1 case c-b negative admise, 36 autres charges "
+            f"certifiees ; b_i et c_j negatifs toujours refuses ; "
+            f"non-degenerescence traitee ailleurs ({motif or 'ok'})")
+
+
+# ======================================================================
 
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith('t_')]

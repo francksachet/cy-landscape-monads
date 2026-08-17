@@ -301,14 +301,37 @@ def domaine_valide(ambient, config, b_charges, c_charges, rank_c_max=1):
     if rank_c_max is not None and len(c_charges) > rank_c_max:
         return False
     m = len(c_charges[0])
+    # Charges qui doivent PORTER des sections : on exige qu'elles soient
+    # positives et que h^0 y soit certifie.
     ch = [list(x) for x in b_charges] + [list(x) for x in c_charges]
     ch += [[b_charges[i][k] + b_charges[j][k] for k in range(m)]
            for i in range(len(b_charges)) for j in range(i + 1, len(b_charges))]
     for c in c_charges:
         ch += [[c[k] + x[k] for k in range(m)] for x in b_charges]
-        ch += [[c[k] - x[k] for k in range(m)] for x in b_charges]
     if any(any(v < 0 for v in x) for x in ch):
         return False
+
+    # Les degres c_j - b_i sont d'une AUTRE nature : ce sont les cases de la
+    # matrice f. Une case de degre negatif n'est pas un defaut du modele --
+    # elle signifie simplement H^0(O(c_j - b_i)) = 0, donc une case
+    # identiquement nulle. Toute la machinerie le traite deja ainsi :
+    # `espace_f_equivariant` calcule `actif = all(x >= 0 ...)`,
+    # `h0_V_generique` insere un bloc de zeros, et `decomposition_h1_V`
+    # saute les cases absentes de `offsets`.
+    #
+    # Les exiger positives etait donc une condition PLUS STRICTE que ce que
+    # le code consommateur demande, et elle avait un cout precis : les SEPT
+    # candidats du catalogue portant un groupe Z4 -- cyclique, d'ordre 4,
+    # donc la seule route vers le rang 4 exempte du cocycle du §5.27 --
+    # etaient tous ecartes « hors domaine » a cause d'UNE case negative
+    # chacun, les 36 autres charges etant certifiees.
+    for c in c_charges:
+        for x in b_charges:
+            d = [c[k] - x[k] for k in range(m)]
+            if any(v < 0 for v in d):
+                continue          # case nulle : rien a certifier
+            ch.append(d)
+
     for x in ch:
         r = koszul_cohomology_ex(ambient, config, x)
         if not r['certified_by_degree'][0]:

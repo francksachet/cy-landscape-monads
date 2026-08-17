@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 36 tests.
+> non une propriété des candidats, et la suite compte 37 tests.
 
 ---
 
@@ -134,7 +134,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        36 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        37 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -1789,6 +1789,70 @@ ne survit-il ? Là est le prochain chantier — pas dans les huit.
 
 ---
 
+### 5.28 Une case nulle n'est pas une sortie de domaine — et elle fermait la seule route restante
+
+Le §5.27 ferme la route ℤ₂×ℤ₂ : les 2 322 candidats admissibles sont tués par la
+stabilité équivariante, et les 8 « survivants » sont des artefacts de relèvement
+projectif. Restait à regarder les autres groupes d'ordre 4. Le catalogue en
+contient **sept à ℤ₄** — et ℤ₄ est **cyclique**, donc structurellement à l'abri
+du cocycle : un générateur unique ne peut pas ne pas commuter avec lui-même.
+
+**Les sept étaient écartés « hors domaine », et jamais évalués.** Cause exacte,
+mesurée : **une seule** charge négative chacun, sur les 37 que teste
+`domaine_valide` — et toujours de la forme c_j − b_i.
+
+Or ces degrés-là ne sont pas de même nature que les autres. Ce sont les **cases
+de la matrice f**. Une case de degré négatif signifie H⁰(O(c_j − b_i)) = 0, donc
+une case identiquement nulle — et toute la machinerie le traite déjà ainsi :
+
+| | ce qui est déjà fait |
+|---|---|
+| `espace_f_equivariant` | calcule `actif = all(x >= 0 ...)` et saute la case |
+| `h0_V_generique` | insère un bloc de zéros |
+| `decomposition_h1_V` | saute les cases absentes de `offsets` |
+
+La condition était donc **plus stricte que ce que le code consommateur demande**.
+Même forme que la ligne `len(c_charges) != 1` du §6 : une condition unique qui
+écartait en amont des candidats parfaitement traitables.
+
+**Après relaxation** — les charges qui doivent *porter* des sections (b, c,
+bᵢ+bⱼ, c+b) restent exigées positives et certifiées ; seules les cases c−b
+peuvent être négatives — **quatre des sept passent** le domaine, et le résultat
+est celui qu'on espérait sans oser l'annoncer :
+
+| CICY | ambiant | anomalie | h⁰(V) générique | h⁰(V) équivariant |
+|---|---|---|---|---|
+| **#6826** | [1,1,4] | OK | 0 | **0** à λ = ±1 |
+| **#6836** | [1,1,1,1,3] | OK | 0 | **0** à λ = ±1 |
+| **#6836** (2ᵉ) | [1,1,1,1,3] | OK | 0 | **0** à λ = ±1 |
+| **#7735** | [1,1,5] | OK | 0 | **0** à λ = ±1 |
+
+Et le test **mord** : les deux autres relèvements λ = ±i donnent h⁰ = 4, 5 ou 6.
+Ce ne sont pas des zéros obtenus parce que la contrainte serait vide — c'est
+exactement le piège du §5.3, et il est écarté ici par mesure.
+
+Ce sont les **premiers candidats d'ordre 4 sans cocycle** à passer l'étape qui
+tue tout le reste.
+
+**Ce qui manque encore, et c'est une seule chose.** Ils ont tous **rank_C = 2**.
+Or `hoppe_sur_espace`, `f_sans_point_base` et `decomposition_h1_V` supposent
+rank_C = 1 et se déclarent non calculables au-delà. Le verdict reste donc
+`indéterminé`, et le nombre de générations sur le quotient — 12/4 = 3 attendu —
+n'est pas encore établi.
+
+> L'item « rank_C = 2 » du §6 change de statut. Ce n'était qu'une limite connue
+> de l'outillage ; c'est désormais **la dernière porte** avant la seule route
+> vers le rang 4 que ce projet ait jamais ouverte.
+
+Réserve à ne pas perdre : #6826 a h¹(B₅) = 1 ≠ 0, donc H¹(V) n'y est pas
+simplement le conoyau — ce candidat-là demandera un traitement à part.
+
+**Le test (37ᵉ)** vérifie les deux sens : une case c−b négative ne fait plus
+sortir du domaine, **et** un bᵢ ou un cⱼ négatif le fait toujours. Supprimer le
+contrôle de signe restant le fait échouer.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -1855,7 +1919,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 36 tests, ~4 min. À lancer après chaque modification,
+**`tests_regression.py` — 37 tests, ~4 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique

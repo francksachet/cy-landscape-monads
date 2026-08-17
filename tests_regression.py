@@ -2878,6 +2878,102 @@ def t_base_cech():
 
 
 # ======================================================================
+# Produit de Cech par une section ordinaire
+# ======================================================================
+
+@test("produit de Cech : regle monomiale, surjectivite en H^n, associativite")
+def t_produit_cech():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    La regle est : additionner les exposants, PUIS projeter -- le produit
+    survit si et seulement si tous les exposants restent <= -1. Elle decoule
+    de ce que H^n(P^n, O(d)) est le quotient des monomes de Laurent par ceux
+    qui ont un exposant >= 0. Une regle plus permissive (garder tout) ou
+    plus stricte (tout tuer) donnerait des dimensions plausibles mais
+    fausses, et rien ailleurs ne le signalerait.
+
+    Trois volets, dont le deuxieme est une PREDICTION INDEPENDANTE :
+
+      (a) les cas de P^1 verifies a la main : 1/(x0 x1) fois x0 vaut zero,
+          1/(x0^2 x1) fois x0 donne 1/(x0 x1) ;
+      (b) la suite 0 -> O(d) --s--> O(d+1) -> O_H(d+1) -> 0 avec H
+          l'hyperplan s = 0 : comme O_H vit sur P^{n-1}, H^n(O_H) = 0 et la
+          multiplication par une section generique est SURJECTIVE en H^n.
+          Le rang de la matrice doit donc valoir dim H^n(O(d+1)) exactement ;
+      (c) associativite : (w.s).t = w.(s t), sur des monomes.
+    """
+    import random
+    from cy_landscape.core.cech import (base_hq_facteur, matrice_produit,
+                                        produit_classe, monomes_positifs)
+
+    # --- (a) les cas faits a la main ------------------------------------
+    assert produit_classe(((-1, -1),), ((1, 0),)) is None, \
+        "1/(x0 x1) fois x0 devrait mourir"
+    assert produit_classe(((-2, -1),), ((1, 0),)) == ((-1, -1),), \
+        produit_classe(((-2, -1),), ((1, 0),))
+    assert produit_classe(((-2, -1),), ((0, 1),)) is None, \
+        "l'exposant de x1 passerait a 0"
+    # un facteur ORDINAIRE ne meurt jamais
+    assert produit_classe(((2, 1),), ((1, 3),)) == ((3, 4),)
+    # mixte : facteur negatif qui survit, facteur ordinaire qui grandit
+    assert produit_classe(((-2, -1), (0, 0)), ((1, 0), (2, 1))) == \
+        ((-1, -1), (2, 1))
+
+    # --- (b) surjectivite en H^n, contre la suite d'hyperplan -----------
+    random.seed(0)
+    n_cas = 0
+    for n in (1, 2, 3):
+        for d in range(-n - 4, -n - 1):
+            src = [(w,) for w in base_hq_facteur(n, d, n)]
+            dst = [(w,) for w in base_hq_facteur(n, d + 1, n)]
+            if not src or not dst:
+                continue
+            poly = [(random.randint(1, 20), (m,))
+                    for m in monomes_positifs(n, 1)]
+            M = np.array(matrice_produit(src, dst, poly), dtype=float)
+            r = np.linalg.matrix_rank(M)
+            assert r == len(dst), \
+                (n, d, r, len(dst),
+                 "la multiplication par une section generique n'est pas "
+                 "surjective en H^n : la regle de projection est fausse")
+            n_cas += 1
+    assert n_cas >= 8, n_cas
+
+    # --- (c) associativite ---------------------------------------------
+    n_assoc = 0
+    for _ in range(200):
+        n = random.choice([1, 2, 3])
+        d = random.randint(-n - 5, -n - 1)
+        base = base_hq_facteur(n, d, n)
+        if not base:
+            continue
+        w = (random.choice(base),)
+        s = (tuple(random.randint(0, 2) for _ in range(n + 1)),)
+        t = (tuple(random.randint(0, 2) for _ in range(n + 1)),)
+        st = (tuple(a + b for a, b in zip(s[0], t[0])),)
+        gauche = produit_classe(w, s)
+        gauche = None if gauche is None else produit_classe(gauche, t)
+        droite = produit_classe(w, st)
+        assert gauche == droite, (w, s, t, gauche, droite)
+        n_assoc += 1
+    assert n_assoc >= 150, n_assoc
+
+    # --- une base cible incomplete doit LEVER, pas ignorer --------------
+    try:
+        matrice_produit([((-2, -1),)], [], [(1, ((1, 0),))])
+        leve = False
+    except KeyError:
+        leve = True
+    assert leve, ("un produit tombant hors de la base cible est ignore en "
+                  "silence : une classe pourrait disparaitre sans trace")
+
+    return (f"{n_cas} cas de surjectivite en H^n conformes a la suite "
+            f"d'hyperplan ; {n_assoc} associativites ; cas de P^1 faits a "
+            f"la main ; base cible incomplete detectee")
+
+
+# ======================================================================
 
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith('t_')]

@@ -6,7 +6,7 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 39 tests.
+> non une propriété des candidats, et la suite compte 40 tests.
 
 ---
 
@@ -134,7 +134,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        39 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        40 tests — À LANCER AVANT CHAQUE SCAN
 ├── validate_cohomology.py     harnais de validation du socle
 ├── audit_results.py           triage 1 : cohérence interne
 ├── triage_clean.py            triage 2 : n_anti, familles, doublons
@@ -2037,6 +2037,60 @@ C'est là que les candidats ℤ₄ redeviendront calculables — pas avant.
 
 ---
 
+### 5.32 Le produit de Čech — deuxième étape, et là où s'arrête ce qui est sûr
+
+**La règle est plus simple que je ne le craignais.** H^n(P^n, O(d)) est le
+quotient des monômes de Laurent de degré d par ceux qui ont **au moins un
+exposant ≥ 0** — ceux-là viennent des faces C^{n−1}. Multiplier par un monôme
+ordinaire revient donc à additionner les exposants **puis à projeter** :
+
+> le produit survit **si et seulement si** tous les exposants restent ≤ −1.
+
+Sur P¹ : 1/(x₀x₁) fois x₀ vaut **zéro** (l'exposant passe à 0, on retombe dans
+l'image de C⁰), tandis que 1/(x₀²x₁) fois x₀ donne 1/(x₀x₁). Il n'y a pas de
+terme correctif à ce niveau.
+
+**Validé contre une prédiction indépendante.** La suite
+
+```
+    0 -> O(d) --s--> O(d+1) -> O_H(d+1) -> 0        H = {s = 0}
+```
+
+donne H^n(O_H) = 0, puisque O_H vit sur P^{n−1} : la multiplication par une
+section générique est donc **surjective en H^n**. Le rang de la matrice doit
+valoir exactement dim H^n(O(d+1)).
+
+| P^n | d | dim source | dim but | rang obtenu |
+|---|---|---|---|---|
+| P¹ | −5 | 4 | 3 | **3** |
+| P² | −6 | 10 | 6 | **6** |
+| P³ | −7 | 20 | 10 | **10** |
+
+**9 cas sur 9.** Plus 200 associativités (w·s)·t = w·(st), et les cas de P¹
+vérifiés à la main. Les deux sabotages de la règle — garder tout, ou tout tuer
+dès qu'un exposant change de signe — font tomber le 40ᵉ test.
+
+**Et voici où s'arrête ce qui est sûr.** Ce produit est celui de la suite
+spectrale **associée graduée**. Dans H⁰(Y, O(a)), les sections venant de
+l'ambiant forment un **sous**-espace, et les classes de Čech n'en sont qu'un
+**quotient**. La matrice du produit dans la base (ordinaire, Čech) est donc
+triangulaire par blocs :
+
+```
+    [ ordinaire -> ordinaire        correction ]
+    [ 0                        Cech -> Cech    ]
+```
+
+Le bloc **correction**, de Čech vers ordinaire, ne se lit pas sur les monômes :
+il vient de la différentielle de Koszul. C'est le seul morceau du chantier dont
+je ne puisse pas dire d'avance qu'il tombe juste, et il n'est pas écrit.
+
+Tant qu'il manque, `matrice_produit` ne suffit pas à recalculer h⁰(V) sur les
+charges hors modèle : elle donne les deux blocs diagonaux, pas la matrice
+entière. C'est la troisième étape, avec l'action de Γ.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -2103,7 +2157,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 39 tests, ~4 min. À lancer après chaque modification,
+**`tests_regression.py` — 40 tests, ~4 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique

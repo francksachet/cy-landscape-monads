@@ -181,3 +181,87 @@ def cardinal_hq(ambient, b, q):
                 d *= comb(-b[i] - 1, n) if b[i] <= -n - 1 else 0
         total += d
     return total
+
+
+# ======================================================================
+# Produit par une section ordinaire
+# ======================================================================
+#
+# LA REGLE, ET POURQUOI ELLE EST SI SIMPLE
+# ----------------------------------------
+# Sur le recouvrement standard de P^n, H^n(P^n, O(d)) est le quotient des
+# monomes de Laurent de degre d par ceux qui ont AU MOINS un exposant >= 0
+# (ceux-la viennent des faces C^{n-1}). Une base est donc donnee par les
+# monomes a exposants tous <= -1, et multiplier par un monome ordinaire
+# revient a additionner les exposants PUIS a projeter :
+#
+#     le produit survit  <=>  tous les exposants restent <= -1
+#
+# Verifie a la main sur P^1 : 1/(x0 x1) fois x0 vaut zero (l'exposant de x0
+# passe a 0, on retombe dans l'image de C^0), tandis que 1/(x0^2 x1) fois x0
+# donne 1/(x0 x1). C'est tout -- il n'y a pas de terme correctif a ce
+# niveau, la difficulte est ailleurs (voir la note en fin de module).
+
+def produit_classe(w, monome):
+    """
+    Multiplie une classe de Kunneth `w` par un monome ordinaire.
+
+    `w`     : tuple d'exposants par facteur (certains facteurs negatifs).
+    `monome`: tuple d'exposants par facteur, tous >= 0.
+
+    Rend le tuple produit, ou None si la classe MEURT -- c'est-a-dire si un
+    facteur a exposants negatifs voit l'un d'eux atteindre 0.
+    """
+    sortie = []
+    for exp, mon in zip(w, monome):
+        negatif = any(v < 0 for v in exp)
+        prod = tuple(int(a) + int(b) for a, b in zip(exp, mon))
+        if negatif and any(v >= 0 for v in prod):
+            return None
+        sortie.append(prod)
+    return tuple(sortie)
+
+
+def matrice_produit(base_src, base_dst, polynome):
+    """
+    Matrice du produit par `polynome` de <base_src> vers <base_dst>.
+
+    `polynome` : liste de (coefficient, monome). Les bases sont des listes
+    de classes au format de `base_hq_ambiant`.
+
+    Les classes qui meurent ne contribuent a rien -- c'est la projection du
+    quotient de Cech, pas une troncature arbitraire.
+    """
+    index = {w: j for j, w in enumerate(base_dst)}
+    M = [[0] * len(base_src) for _ in range(len(base_dst))]
+    for j, w in enumerate(base_src):
+        for coef, mon in polynome:
+            r = produit_classe(w, mon)
+            if r is None:
+                continue
+            i = index.get(r)
+            if i is None:
+                # Le produit est une classe valide du degre cible mais
+                # absente de la base fournie : c'est une erreur d'appel,
+                # pas un cas a ignorer en silence.
+                raise KeyError(f"classe produite hors de la base cible : {r}")
+            M[i][j] += coef
+    return M
+
+
+# ----------------------------------------------------------------------
+# CE QUI N'EST PAS ENCORE FAIT, ET OU EST LA DIFFICULTE
+# ----------------------------------------------------------------------
+# Le produit ci-dessus est celui de la suite spectrale ASSOCIEE GRADUEE.
+# Dans H^0(Y, O(a)), les sections venant de l'ambiant forment un
+# SOUS-espace (le coin E_inf^{0,0}) et les classes de Cech n'en sont qu'un
+# QUOTIENT. La matrice du produit dans la base (ordinaire, Cech) est donc
+# triangulaire par blocs
+#
+#     [ ordinaire -> ordinaire      correction ]
+#     [ 0                     Cech -> Cech     ]
+#
+# et le bloc `correction`, de Cech vers ordinaire, n'est pas donne par la
+# regle monomiale : il vient de la differentielle de Koszul. C'est lui qui
+# reste a construire, et c'est le seul endroit du chantier dont je ne
+# puisse pas dire d'avance qu'il tombe juste.

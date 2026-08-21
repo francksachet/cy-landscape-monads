@@ -210,10 +210,14 @@ def analyser(cicy_num, amb, cfg, b, c, symetries, groupes=None, graine=0):
 
         rang_V = len(b) - len(c)
         # Hoppe, c1(V) = 0 : rk 3 -> h0(V), h3(V) ; rk >= 4 -> + h0(w2V).
-        # w2V n'est calculable par ce chemin que si rank_C = 1, comme dans
-        # hoppe_fast. Au-dela on ne conclut pas.
+        #
+        # La condition `and len(c) == 1` a saute : le chemin wedge traite
+        # desormais tout rank_C (la cible wedge^{p-1}B (x) C se decompose en
+        # (+)_j wedge^{p-1}B(c_j)). Sans cette levee, la generalisation ne
+        # produirait aucun verdict -- c'est ici que les candidats Z4 du §2.3,
+        # tous a rank_C = 2, etaient renvoyes `indetermine`.
         besoin_w2 = rang_V >= 4
-        w2_possible = besoin_w2 and len(c) == 1
+        w2_possible = besoin_w2
 
         h_gen = h0_V_generique(anneau, b, c, p, np.random.RandomState(graine + 5))
         base_tot = np.eye(out['dim_totale'], dtype=np.int64)
@@ -236,8 +240,9 @@ def analyser(cicy_num, amb, cfg, b, c, symetries, groupes=None, graine=0):
             lam = tuple(int(x) if x < p // 2 else int(x) - p for x in s['lambda'])
 
             # « survit » exige TOUS les tests disponibles a ce rang. Un test
-            # non calculable (w2 hors taille, ou rank_C >= 2) rend le verdict
-            # indetermine -- jamais favorable.
+            # non calculable (w2 hors taille) rend le verdict indetermine --
+            # jamais favorable. Le motif « rank_C >= 2 » a disparu de cette
+            # liste : ce n'est plus un cas non calculable.
             if h_gen != 0 or h_eq != 0:
                 survit, indetermine = False, False
             elif not besoin_w2:
@@ -259,7 +264,7 @@ def analyser(cicy_num, amb, cfg, b, c, symetries, groupes=None, graine=0):
             # jusqu'ici traite nulle part sous contrainte. Un p non calculable
             # rend le verdict indetermine, jamais favorable.
             hoppe = None
-            if survit and len(c) == 1:
+            if survit:
                 hoppe = hoppe_sur_espace(
                     anneau, b, c, s['base'], out['offsets'], out['dims'],
                     out['degres'], p, np.random.RandomState(graine + 5))

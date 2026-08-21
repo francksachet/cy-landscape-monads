@@ -397,17 +397,25 @@ def h0_wedge2_V_sur_espace(anneau, b_charges, c_charges, base, offsets, dims,
     `h0_V_sur_espace`. Sans elle, un candidat de rang 4 ou 5 declare
     « survit » ne l'est que sur un tiers du critere.
 
-    Restreint a rank_C = 1, comme tout le chemin wedge^2 du pipeline
-    (`hoppe_fast` renvoie explicitement « non testable » au-dela).
+    Vaut pour TOUT rank_C : la cible B (x) C se decompose en (+)_{jc}
+    B(c_jc), et la contraction gagne une composante par ligne de f. Cette
+    fonction reste une implementation INDEPENDANTE de
+    `h0_wedgep_V_sur_espace(p_ext=2)` -- c'est ce qui permet de les
+    confronter l'une a l'autre, y compris a rank_C = 2. Deux chemins qui
+    tombent d'accord valent mieux qu'un chemin qu'on relit.
+
+    (`hoppe_fast`, lui, continue de renvoyer « non testable » au-dela de
+    rank_C = 1 : il ne passe pas par ici, il a son propre chemin wedge^2.)
 
     Renvoie (h0_min, dim_source) ou (None, dim_source) si la taille depasse
     `maxdim` -- auquel cas l'appelant ne doit PAS conclure.
     """
     from cy_landscape.core.sections import _mult_matrix, rref_mod
-    if len(c_charges) != 1:
+    cs = [list(x) for x in c_charges]
+    rC = len(cs)
+    if rC < 1:
         return None, 0
     m = len(b_charges[0])
-    c = list(c_charges[0])
     n = len(b_charges)
     paires = [(i, j) for i in range(n) for j in range(i + 1, n)]
 
@@ -415,8 +423,10 @@ def h0_wedge2_V_sur_espace(anneau, b_charges, c_charges, base, offsets, dims,
            for (i, j) in paires}
     dims_src = {ij: anneau.dimY(src[ij]) for ij in paires}
     dsrc = sum(dims_src.values())
-    dst = [[b_charges[k][t] + c[t] for t in range(m)] for k in range(n)]
-    ddst = sum(anneau.dimY(d) for d in dst)
+    # B (x) C = (+)_{k,jc} O(b_k + c_jc) : la cible s'indexe par (k, jc).
+    dst = {(k, jc): [b_charges[k][t] + cs[jc][t] for t in range(m)]
+           for k in range(n) for jc in range(rC)}
+    ddst = sum(anneau.dimY(d) for d in dst.values())
     if dsrc == 0:
         return 0, 0
     if max(dsrc, ddst) > maxdim:
@@ -424,8 +434,9 @@ def h0_wedge2_V_sur_espace(anneau, b_charges, c_charges, base, offsets, dims,
 
     offs_d, acc = {}, 0
     for k in range(n):
-        offs_d[k] = acc
-        acc += anneau.dimY(dst[k])
+        for jc in range(rC):
+            offs_d[(k, jc)] = acc
+            acc += anneau.dimY(dst[(k, jc)])
 
     meilleur = None
     for _ in range(n_essais):
@@ -435,15 +446,18 @@ def h0_wedge2_V_sur_espace(anneau, b_charges, c_charges, base, offsets, dims,
         for (i, j) in paires:
             w = dims_src[(i, j)]
             for (k, l, sgn) in ((i, j, 1), (j, i, -1)):
-                if (0, l) not in offsets:
-                    continue                      # f_l nul (degre negatif)
-                deg, S, coeffs = _f_depuis_vecteur(anneau, v, offsets, dims,
-                                                   degres, 0, l)
-                blk = _mult_matrix(anneau, src[(i, j)], deg, (S, coeffs),
-                                   dst[k])
-                if blk.size:
-                    a, b = offs_d[k], offs_d[k] + blk.shape[0]
-                    M[a:b, oc:oc + w] = (M[a:b, oc:oc + w] + sgn * blk) % p
+                for jc in range(rC):
+                    if (jc, l) not in offsets:
+                        continue              # f_{jc,l} nul (degre negatif)
+                    deg, S, coeffs = _f_depuis_vecteur(anneau, v, offsets,
+                                                       dims, degres, jc, l)
+                    blk = _mult_matrix(anneau, src[(i, j)], deg, (S, coeffs),
+                                       dst[(k, jc)])
+                    if blk.size:
+                        a = offs_d[(k, jc)]
+                        b = a + blk.shape[0]
+                        M[a:b, oc:oc + w] = (M[a:b, oc:oc + w]
+                                             + sgn * blk) % p
             oc += w
         rang, _ = rref_mod(M.T.copy(), p)
         h0 = dsrc - rang
@@ -455,7 +469,7 @@ def h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, p_ext, base, offsets,
                            dims, degres, p, rng, n_essais=5, maxdim=6000,
                            twist=None):
     """
-    h^0(wedge^p V) pour un f tire dans un sous-espace donne. rank_C = 1.
+    h^0(wedge^p V) pour un f tire dans un sous-espace donne. TOUT rank_C.
 
     ----------------------------------------------------------------------
     Pourquoi une version generale en p
@@ -464,8 +478,8 @@ def h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, p_ext, base, offsets,
 
         V stable  <=>  h^0(wedge^p V) = 0  pour p = 1 .. rk-1
 
-    et TOUTES ces quantites se calculent par le meme noyau. Pour C de rang 1,
-    la resolution de wedge^p V donne
+    et TOUTES ces quantites se calculent par le meme noyau. La resolution de
+    wedge^p V donne
 
         0 -> wedge^p V -> wedge^p B -> wedge^{p-1} B (x) C -> ...
 
@@ -476,6 +490,32 @@ def h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, p_ext, base, offsets,
     L'application est la contraction par f :
 
         e_{i_1} ^ ... ^ e_{i_p}  |->  sum_k (-1)^{k-1} f_{i_k} . e_{I \\ i_k}
+
+    ----------------------------------------------------------------------
+    Ce qui change quand C n'est plus de rang 1 (et ce qui ne change pas)
+    ----------------------------------------------------------------------
+    La suite 0 -> wedge^p V -> wedge^p B -> wedge^{p-1}B (x) C est exacte a
+    gauche pour TOUT rang de C : le noyau de la contraction est wedge^p V,
+    point. On le voit sur un scindage local B = V (+) C, ou la contraction
+    envoie chaque composante wedge^a V (x) wedge^b C avec b >= 1 sur un
+    terme non nul. La restriction a rank_C = 1 n'etait donc pas dans les
+    mathematiques mais dans l'implementation, qui construisait la cible
+    comme wedge^{p-1}B(c) avec un seul c.
+
+    Pour rank_C = r, wedge^{p-1}B (x) C = (+)_{j=1..r} wedge^{p-1}B(c_j) :
+    la cible s'indexe par (J, j), et la contraction gagne une composante par
+    LIGNE de f,
+
+        e_I  |->  sum_k (-1)^{k-1} f_{j,i_k} . e_{I \\ i_k}   dans (I\\i_k, j)
+
+    Les sources, les signes et les degres de f sont inchanges -- f_{j,i} est
+    de degre c_j - b_i, ce que `degres[j][i]` porte deja. A r = 1 la
+    construction redonne l'ancienne terme pour terme, ce qu'un test de
+    non-regression exige.
+
+    RESERVE, a declarer : la cible est r fois plus grande. Le plafond
+    `maxdim` mord donc plus souvent a r = 2, ce qui produit davantage de
+    `None` -- des cas ou l'on ne conclut pas. Jamais un succes de plus.
 
     ----------------------------------------------------------------------
     Ce que cela debloque : h^3
@@ -527,26 +567,32 @@ def h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, p_ext, base, offsets,
     """
     from itertools import combinations
     from cy_landscape.core.sections import _mult_matrix, rref_mod
-    if len(c_charges) != 1:
-        return None, 0
     n = len(b_charges)
     m = len(b_charges[0])
-    c = list(c_charges[0])
+    cs = [list(x) for x in c_charges]
+    rC = len(cs)
+    if rC < 1:
+        return None, 0
     if not (1 <= p_ext <= n):
         return None, 0
 
+    # CIBLE. wedge^{p-1}B (x) C se decompose en (+)_j wedge^{p-1}B(c_j) :
+    # elle s'indexe donc par (J, j) et non par J seul. A rank_C = 1 il n'y a
+    # qu'un j et on retrouve exactement l'ancienne construction, terme pour
+    # terme -- c'est ce qu'exige le test de non-regression.
     src_idx = list(combinations(range(n), p_ext))
-    dst_idx = list(combinations(range(n), p_ext - 1))
+    dst_idx = [(J, j) for J in combinations(range(n), p_ext - 1)
+               for j in range(rC)]
     tw = [0] * m if twist is None else [int(x) for x in twist]
     src_deg = {I: [sum(b_charges[i][k] for i in I) - tw[k] for k in range(m)]
                for I in src_idx}
-    dst_deg = {J: [sum(b_charges[j][k] for j in J) + c[k] - tw[k]
-                   for k in range(m)]
-               for J in dst_idx}
+    dst_deg = {(J, j): [sum(b_charges[t][k] for t in J) + cs[j][k] - tw[k]
+                        for k in range(m)]
+               for (J, j) in dst_idx}
 
     dsrc_par = {I: anneau.dimY(src_deg[I]) for I in src_idx}
     dsrc = sum(dsrc_par.values())
-    ddst_par = {J: anneau.dimY(dst_deg[J]) for J in dst_idx}
+    ddst_par = {D: anneau.dimY(dst_deg[D]) for D in dst_idx}
     ddst = sum(ddst_par.values())
     if dsrc == 0:
         return 0, 0
@@ -558,40 +604,43 @@ def h0_wedgep_V_sur_espace(anneau, b_charges, c_charges, p_ext, base, offsets,
         off_s[I] = a
         a += dsrc_par[I]
     off_d, a = {}, 0
-    for J in dst_idx:
-        off_d[J] = a
-        a += ddst_par[J]
+    for D in dst_idx:
+        off_d[D] = a
+        a += ddst_par[D]
 
     meilleur = None
     for _ in range(n_essais):
         v = (rng.randint(0, p, size=base.shape[0]) @ base) % p
+        # f est une matrice rank_C x rank_B : on lit TOUTES ses lignes.
         fpol = {}
-        for i in range(n):
-            if (0, i) not in offsets:
-                continue
-            deg = degres[0][i]
-            S, idx, free, piv, Mred = anneau.quotient(deg)
-            coeffs = np.zeros(len(S), dtype=np.int64)
-            for t, k in enumerate(free):
-                coeffs[k] = v[offsets[(0, i)] + t]
-            fpol[i] = (deg, S, coeffs)
+        for j in range(rC):
+            for i in range(n):
+                if (j, i) not in offsets:
+                    continue
+                deg = degres[j][i]
+                S, idx, free, piv, Mred = anneau.quotient(deg)
+                coeffs = np.zeros(len(S), dtype=np.int64)
+                for t, k in enumerate(free):
+                    coeffs[k] = v[offsets[(j, i)] + t]
+                fpol[(j, i)] = (deg, S, coeffs)
 
         M = np.zeros((ddst, dsrc), dtype=np.int64)
         for I in src_idx:
             for k, ik in enumerate(I):
-                if ik not in fpol:
-                    continue                      # f_{ik} nul (degre negatif)
                 J = tuple(x for x in I if x != ik)
-                deg, S, coeffs = fpol[ik]
-                blk = _mult_matrix(anneau, src_deg[I], deg, (S, coeffs),
-                                   dst_deg[J])
-                if not blk.size:
-                    continue
                 signe = 1 if k % 2 == 0 else -1
-                r0, c0 = off_d[J], off_s[I]
-                M[r0:r0 + blk.shape[0], c0:c0 + blk.shape[1]] = (
-                    M[r0:r0 + blk.shape[0], c0:c0 + blk.shape[1]]
-                    + signe * blk) % p
+                for j in range(rC):
+                    if (j, ik) not in fpol:
+                        continue              # f_{j,ik} nul (degre negatif)
+                    deg, S, coeffs = fpol[(j, ik)]
+                    blk = _mult_matrix(anneau, src_deg[I], deg, (S, coeffs),
+                                       dst_deg[(J, j)])
+                    if not blk.size:
+                        continue
+                    r0, c0 = off_d[(J, j)], off_s[I]
+                    M[r0:r0 + blk.shape[0], c0:c0 + blk.shape[1]] = (
+                        M[r0:r0 + blk.shape[0], c0:c0 + blk.shape[1]]
+                        + signe * blk) % p
         rang, _ = rref_mod(M.T.copy(), p)
         h0 = dsrc - rang
         meilleur = h0 if meilleur is None else min(meilleur, h0)
@@ -614,23 +663,26 @@ def hoppe_suffisant_generique(ambient, config, b_charges, c_charges, D,
     `hoppe_suffisant_sur_espace` avec la base contrainte qui fait foi
     (§5.14).
 
-    Renvoie None si la monade est hors du domaine du modele S/I, ou si
-    rank_C != 1 -- dans les deux cas on ne conclut pas.
+    Renvoie None si la monade est hors du domaine du modele S/I -- on ne
+    conclut alors pas. La restriction a rank_C = 1 est levee : le domaine est
+    teste avec `rank_c_max=None`, et le chemin wedge sous-jacent traite
+    desormais tout rang de C.
     """
     from cy_landscape.core.sections import Ring, P, domaine_valide
-    if len(c_charges) != 1:
-        return None
-    if not domaine_valide(ambient, config, b_charges, c_charges):
+    if not domaine_valide(ambient, config, b_charges, c_charges,
+                          rank_c_max=None):
         return None
     m = len(ambient)
-    degres = [[[c_charges[0][k] - b_charges[i][k] for k in range(m)]
-               for i in range(len(b_charges))]]
+    degres = [[[c_charges[j][k] - b_charges[i][k] for k in range(m)]
+               for i in range(len(b_charges))]
+              for j in range(len(c_charges))]
     R = Ring(ambient, config, seed=seed)
-    cases = [(0, i) for i in range(len(b_charges))
-             if all(x >= 0 for x in degres[0][i])]
+    cases = [(j, i) for j in range(len(c_charges))
+             for i in range(len(b_charges))
+             if all(x >= 0 for x in degres[j][i])]
     dims, offsets, a = {}, {}, 0
     for k in cases:
-        dims[k] = R.dimY(degres[0][k[1]])
+        dims[k] = R.dimY(degres[k[0]][k[1]])
         offsets[k] = a
         a += dims[k]
     if a == 0:
@@ -737,7 +789,12 @@ def hoppe_suffisant_sur_espace(anneau, b_charges, c_charges, base, offsets,
 def hoppe_sur_espace(anneau, b_charges, c_charges, base, offsets, dims,
                      degres, p, rng, maxdim=6000):
     """
-    Critere de Hoppe COMPLET, restreint a un sous-espace de f. rank_C = 1.
+    Critere de Hoppe COMPLET, restreint a un sous-espace de f. TOUT rank_C.
+
+    Cette fonction n'a jamais eu d'hypothese propre sur le rang de C : elle
+    boucle sur q = 1 .. rk-1 avec rk = rank_B - rank_C, deja correct, et
+    delegue tout le calcul a `h0_wedgep_V_sur_espace`. C'est cette derniere
+    qui portait la restriction, et qui ne la porte plus.
 
     Teste h^0(wedge^p V) = 0 pour p = 1 .. rk-1, ce qui est l'enonce meme du
     critere pour c1(V) = 0 -- et non un sous-ensemble comme les phases 1 et 2
@@ -1382,10 +1439,78 @@ def _degres_a_essayer(ambient, c, maxdim, n_degres, t_max=8, b_charges=None):
     return res
 
 
+def _signe_permutation(sigma):
+    """Signe de la permutation, par comptage des inversions."""
+    s = 1
+    for a in range(len(sigma)):
+        for b in range(a + 1, len(sigma)):
+            if sigma[a] > sigma[b]:
+                s = -s
+    return s
+
+
+def _bloc_produit(anneau, facteurs, s, p):
+    """
+    Matrice R_s -> R_{s + sum deg} de la multiplication par le PRODUIT des
+    facteurs, chacun donne comme (degre, base monomiale, coefficients).
+
+    Obtenue en COMPOSANT des multiplications elementaires : (g.h).x = g.(h.x),
+    et la reduction modulo l'ideal est un morphisme d'anneaux, donc composer
+    les matrices de multiplication donne bien la matrice du produit. On evite
+    ainsi de multiplier deux polynomes dans la base monomiale COMPLETE --
+    conversion que rien dans ce module ne fournit, et qu'il aurait fallu
+    ecrire et tester pour rien.
+
+    Rend None si un facteur donne un bloc vide : le produit est alors nul.
+    """
+    from cy_landscape.core.sections import _mult_matrix
+    m = len(s)
+    cur = list(s)
+    M = None
+    for (deg, S, coeffs) in facteurs:
+        nxt = [cur[k] + deg[k] for k in range(m)]
+        A = _mult_matrix(anneau, cur, deg, (S, coeffs), nxt)
+        if A.size == 0:
+            return None
+        M = A if M is None else (A @ M) % p
+        cur = nxt
+    return M
+
+
+def _bloc_mineur(anneau, fmat, K, s, p):
+    """
+    Matrice R_s -> R_{s + deg} de la multiplication par le mineur maximal de
+    f sur les colonnes K, developpe par la formule de Leibniz.
+
+    Un terme dont l'une des entrees est absente (case de degre negatif, donc
+    identiquement nulle) ne contribue pas -- il est saute, pas remplace par
+    autre chose.
+    """
+    from itertools import permutations
+    r = len(K)
+    total = None
+    for sigma in permutations(range(r)):
+        facteurs = []
+        for ligne in range(r):
+            e = fmat.get((ligne, K[sigma[ligne]]))
+            if e is None:
+                facteurs = None
+                break
+            facteurs.append(e)
+        if facteurs is None:
+            continue
+        M = _bloc_produit(anneau, facteurs, s, p)
+        if M is None:
+            continue
+        sgn = _signe_permutation(sigma)
+        total = (sgn * M) % p if total is None else (total + sgn * M) % p
+    return total
+
+
 def f_sans_point_base(anneau, b_charges, c_charges, base, offsets, dims,
                       degres, p, rng, n_essais=3, n_degres=4, maxdim=6000):
     """
-    CERTIFICAT de surjectivite de f : B -> C, pour rank_C = 1.
+    CERTIFICAT de surjectivite de f : B -> C, pour TOUT rank_C.
 
     ----------------------------------------------------------------------
     Pourquoi ce test manquait, et pourquoi il porte precisement sur les
@@ -1402,13 +1527,28 @@ def f_sans_point_base(anneau, b_charges, c_charges, base, offsets, dims,
     Le critere
     ----------------------------------------------------------------------
     Pour rank_C = 1, f = (f_1, ..., f_n) est surjective si et seulement si
-    les f_i n'ont aucun zero commun sur Y. Soit J l'ideal qu'ils engendrent
-    dans R = S/I_Y. S'il existe UN multidegre d >= 0 tel que
+    les f_i n'ont aucun zero commun sur Y.
+
+    Pour rank_C = r, f est une matrice r x n de sections, et f est surjective
+    au point y si et seulement si f(y) est de rang r, c'est-a-dire si et
+    seulement si l'un de ses MINEURS MAXIMAUX r x r ne s'annule pas en y. Le
+    generateur du critere n'est donc plus f_i mais le mineur sur les colonnes
+    K = (i_1 < ... < i_r), de multidegre
+
+        deg(mineur_K) = (c_1 + ... + c_r) - (b_{i_1} + ... + b_{i_r})
+
+    A r = 1 les mineurs SONT les f_i : le cas historique est un cas
+    particulier de celui-ci, pas une branche a cote. C'est ce que le test de
+    non-regression verifie, en exigeant les memes verdicts et les memes
+    degres certifiants qu'avant sur des candidats de rank_C = 1.
+
+    Soit J l'ideal engendre par ces generateurs dans R = S/I_Y. S'il existe
+    UN multidegre d >= 0 tel que
 
         J_d = R_d
 
     alors il n'y a pas de zero commun. Demonstration : soit y un zero commun
-    des f_i ; tout element de J_d s'annule en y ; or y est un point de
+    des generateurs ; tout element de J_d s'annule en y ; or y est un point de
     P^{n_1} x ... x P^{n_m}, donc dans chaque facteur au moins une coordonnee
     est non nulle, donc pour tout d >= 0 au moins un monome de multidegre d
     est non nul en y, donc R_d ne s'annule pas entierement en y. D'ou
@@ -1419,10 +1559,17 @@ def f_sans_point_base(anneau, b_charges, c_charges, base, offsets, dims,
     degre, et au-dela de `n_degres` on renvoie `certifie = False` avec
     `concluant = False`.
 
-    J_d est l'image de (+)_i R_{d - deg f_i} --(x f_i)--> R_d. Si un
-    d - deg f_i a une composante negative, le terme ne contribue pas : on
-    teste alors un sous-module de J_d, ce qui ne peut que rendre le critere
-    plus difficile a satisfaire, jamais plus permissif.
+    J_d est l'image de (+)_g R_{d - deg g} --(x g)--> R_d, la somme portant
+    sur les generateurs g. Si un d - deg g a une composante negative, le
+    terme ne contribue pas : on teste alors un sous-module de J_d, ce qui ne
+    peut que rendre le critere plus difficile a satisfaire, jamais plus
+    permissif.
+
+    La matrice de la multiplication par un mineur n'est pas construite en
+    multipliant des polynomes : elle est COMPOSEE a partir des
+    multiplications par les entrees de f (voir `_bloc_produit`), puis
+    combinee par la formule de Leibniz. Rien de neuf n'est donc introduit
+    dans l'arithmetique -- on reutilise `_mult_matrix`, deja eprouve.
 
     ----------------------------------------------------------------------
     Reserve sur GF(p)
@@ -1439,34 +1586,49 @@ def f_sans_point_base(anneau, b_charges, c_charges, base, offsets, dims,
 
     Renvoie {'certifie', 'concluant', 'degre', 'essais'}.
     """
-    from cy_landscape.core.sections import _mult_matrix
-    if len(c_charges) != 1:
-        return {'certifie': False, 'concluant': False, 'degre': None,
-                'motif': 'rank_C >= 2', 'essais': []}
+    from itertools import combinations
     m = len(b_charges[0])
-    c = list(c_charges[0])
+    n = len(b_charges)
+    cs = [list(x) for x in c_charges]
+    rC = len(cs)
+    if rC < 1 or rC > n:
+        return {'certifie': False, 'concluant': False, 'degre': None,
+                'motif': f'rank_C = {rC} incompatible avec rank_B = {n}',
+                'essais': []}
+
+    # Generateurs de J : les mineurs maximaux, indexes par leurs colonnes.
+    # A rC = 1 il y en a un par colonne et ce sont les f_i eux-memes.
+    detC = [sum(cs[j][k] for j in range(rC)) for k in range(m)]
+    colonnes = list(combinations(range(n), rC))
+    deg_gen = {K: [detC[k] - sum(b_charges[i][k] for i in K)
+                   for k in range(m)] for K in colonnes}
+    # `_degres_a_essayer` raisonne sur « degre du generateur = c - b » : on
+    # lui passe donc det C et les sommes de b sur chaque choix de colonnes.
+    b_eff = [[sum(b_charges[i][k] for i in K) for k in range(m)]
+             for K in colonnes]
     journal = []
 
     for _ in range(n_essais):
         v = (rng.randint(0, p, size=base.shape[0]) @ base) % p
-        # coefficients de chaque f_i, sur la base monomiale complete
-        fpol = {}
-        for i in range(len(b_charges)):
-            if (0, i) not in offsets:
-                continue
-            deg = degres[0][i]
-            S, idx, free, piv, Mred = anneau.quotient(deg)
-            coeffs = np.zeros(len(S), dtype=np.int64)
-            for t, k in enumerate(free):
-                coeffs[k] = v[offsets[(0, i)] + t]
-            if coeffs.any():
-                fpol[i] = (deg, S, coeffs)
-        if not fpol:
+        # coefficients de chaque f_{j,i}, sur la base monomiale complete
+        fmat = {}
+        for j in range(rC):
+            for i in range(n):
+                if (j, i) not in offsets:
+                    continue
+                deg = degres[j][i]
+                S, idx, free, piv, Mred = anneau.quotient(deg)
+                coeffs = np.zeros(len(S), dtype=np.int64)
+                for t, k in enumerate(free):
+                    coeffs[k] = v[offsets[(j, i)] + t]
+                if coeffs.any():
+                    fmat[(j, i)] = (deg, S, coeffs)
+        if not fmat:
             journal.append(('f identiquement nul', None, None))
             continue
 
-        for d in _degres_a_essayer(anneau.amb, c, maxdim, n_degres,
-                                   b_charges=b_charges):
+        for d in _degres_a_essayer(anneau.amb, detC, maxdim, n_degres,
+                                   b_charges=b_eff):
             cible = anneau.dimY(d)
             if cible == 0:
                 continue
@@ -1476,20 +1638,20 @@ def f_sans_point_base(anneau, b_charges, c_charges, base, offsets, dims,
             # filtrer revenait a compter comme « non certifie » des degres ou
             # le critere n'avait aucune chance -- et a payer la rref pour rien.
             sources = []
-            for i, (deg, S, coeffs) in fpol.items():
-                s = [d[k] - deg[k] for k in range(m)]
+            for K in colonnes:
+                s = [d[k] - deg_gen[K][k] for k in range(m)]
                 if any(x < 0 for x in s) or anneau.dimY(s) == 0:
                     continue
-                sources.append((i, s, deg, S, coeffs))
-            dim_src = sum(anneau.dimY(s) for _, s, _, _, _ in sources)
+                sources.append((K, s))
+            dim_src = sum(anneau.dimY(s) for _, s in sources)
             if dim_src < cible:
                 journal.append((tuple(d), 'source insuffisante',
                                 f'{dim_src} < {cible}'))
                 continue
             cols = []
-            for i, s, deg, S, coeffs in sources:
-                blk = _mult_matrix(anneau, s, deg, (S, coeffs), d)
-                if blk.size:
+            for K, s in sources:
+                blk = _bloc_mineur(anneau, fmat, K, s, p)
+                if blk is not None and blk.size:
                     cols.append(blk)
             if not cols:
                 continue

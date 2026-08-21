@@ -6,59 +6,62 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 45 tests.
+> non une propriété des candidats, et la suite compte 46 tests.
 
 ---
 
 ## 0. Où reprendre — point d'entrée
 
-**État au 21 août 2026.** Dépôt à `a382950` (§5.35), **45 tests verts**,
+**État au 21 août 2026.** Dépôt à `<commit du §5.36>`, **46 tests verts**,
 `python tests_regression.py` avant toute chose. Environnement : Windows,
 PowerShell (`;` et non `&&`, `Tee-Object`, `python -u`).
 
-**Le balayage qui fait foi est désormais `scan_wilson5`.** 5 636 lots sur
-5 636, 505 601 lignes, **une seule version du code** (`45a6ce28793e`, portée
-par chaque ligne), **zéro** identité contradictoire, **zéro** discordance
-d'orbite sur 18 couples réellement comparés, et la couverture complète —
-56 134 réalisations sur 56 134. C'est le premier fichier de ce projet dont on
-puisse dire ces cinq choses à la fois.
+**Le balayage qui fait foi est `scan_wilson5`.** 5 636 lots sur 5 636, 505 601
+lignes, **une seule version du code**, **zéro** identité contradictoire,
+**zéro** discordance d'orbite sur 18 couples réellement comparés, couverture
+complète — 56 134 réalisations sur 56 134 (§5.35). `scan_wilson4` n'en garde
+que la chaîne amont (scan, audit, triage) et **ne doit pas servir de
+référence** : il mélange trois versions du code.
 
-`scan_wilson4` est conservé comme base de comparaison mais **ne doit plus
-servir de référence** : il mélange au moins trois versions du code (§5.35).
+**Le travail suivant — il n'en reste qu'un, et il décide de quelque chose :**
 
-**Le travail suivant, dans l'ordre :**
-
-1. **Généraliser `hoppe_sur_espace` et `f_sans_point_base` à `rank_C = 2`**,
-   pour que les candidats ℤ₄ du §2.3 — trois générations déjà acquises —
-   puissent recevoir un vrai verdict de stabilité.
-2. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
-   §5.32) : sans lui, `#6836` et `#7735` restent hors de portée, et les
-   dimensions exactes de H¹ sur les charges hors modèle aussi.
+1. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
+   §5.32). Ce n'était pas un item de liste : c'est ce qui décide de `#6947`.
+   Sa charge `c₁ + b₄` donne `dim(S/I) = 84` contre `χ = 76`, rien de
+   certifié — les 8 unités manquantes sont précisément les classes de Čech à
+   construire. Sans lui, `#6947`, `#6836` et `#7735` restent sans verdict de
+   stabilité (§5.36), et les dimensions exactes de H¹ sur les charges hors
+   modèle aussi.
 
 **Deux questions ouvertes, moins urgentes** : durcir `domaine_valide` avec
-`dim(S/I) == h⁰` (casse 5 tests, décision non prise, §5.29) ; et réexaminer
-`#6715`, dont une charge a `dim(S/I) ≠ h⁰`.
+`dim(S/I) == h⁰` (casse 5 tests, décision non prise, §5.29 — c'est ce contrôle
+qui a validé la charge litigieuse de `#7745`, §5.36) ; et réexaminer `#6715`,
+dont une charge a `dim(S/I) ≠ h⁰`.
 
-**Fait depuis le 17 août**, et les deux points ont grossi en cours de route :
+**Fait depuis le 17 août**, et chacun des trois points a grossi en route :
 
 - les **27 couples touchés par le §5.34** — en réalité **48 couples et 5 039
-  réalisations**, le tableau de portée du §5.34 ayant compté par nom de
-  groupe là où σ est une propriété de la réalisation ;
+  réalisations**, le tableau de portée du §5.34 ayant compté par nom de groupe
+  là où σ est une propriété de la réalisation (§5.35) ;
 - les **trous de couverture** (51 % des réalisations non testées), fermés par
-  le même run.
+  le même run ;
+- la **généralisation à `rank_C = 2`** de `hoppe_sur_espace` et
+  `f_sans_point_base` (§5.36) — qui a rendu son verdict : **`#7745` a trois
+  générations et n'est pas stable**, h⁰(∧²V) valant 1 sur le sous-espace
+  équivariant contre 0 sur l'espace entier.
 
-Et un défaut trouvé en chemin, plus profond que les deux : un fichier de
+Et un défaut trouvé en chemin, plus profond que les trois : un fichier de
 résultats ne portait pas la version du code qui l'avait écrit, donc les
 reprises reconduisaient en silence des verdicts d'un programme corrigé depuis
-— **4 049 candidats écartés à tort**. Recalcul complet, marquage de version,
-et la mesure des deux côtés : **aucun verdict retourné, 34 733 SURVIT
-inchangés**. Tout est au §5.35.
+— **4 049 candidats écartés à tort**. Recalcul complet, marquage de version, et
+mesure des deux côtés : **aucun verdict retourné, 34 733 SURVIT inchangés**.
 
 **La discipline qui a trouvé tous les défauts** est au §8 — en particulier la
 *règle des filtres*. Le §5.34 en donne la forme la plus dure (le contrôle et
-l'objet contrôlé partagent le défaut) ; le §5.35 en ajoute une autre, où le
-contrôle crie juste mais désigne le mauvais coupable — suivre son avis coûtait
-plusieurs jours et ne réparait rien.
+l'objet contrôlé partagent le défaut) ; le §5.35 celle où le contrôle crie
+juste mais désigne le mauvais coupable ; le §5.36 celle, plus banale et tout
+aussi coûteuse, d'un booléen qui confond « une charge sur 27 » et « vingt-sept
+sur 27 ».
 
 ---
 
@@ -150,7 +153,7 @@ Enfin, un seul maillon manque à ces 34 733 lignes pour être des verdicts
 complets au sens du §2.1 : le critère de Hoppe **suffisant** et la surjectivité
 n'y sont pas repassés candidat par candidat.
 
-### 2.3 La route ℤ₄ — trois générations, stabilité incomplète
+### 2.3 La route ℤ₄ — trois générations, mais pas stable
 
 Γ cyclique, donc exempt du cocycle du §5.27, et d'ordre 4, donc au-delà du
 plafond Pati–Salam. Sur les trois candidats dont le modèle S/I est exact sur les
@@ -163,12 +166,24 @@ charges b et c (§5.31), après le correctif du §5.34 :
 ```
 
 La décomposition est la **représentation régulière**, ce que le théorème
-d'indice impose, et pour les quatre λ. `#6836` (×2) et `#7735` restent hors de
-portée : leur modèle a des classes de Čech manquantes (§5.32).
+d'indice impose, et pour les quatre λ.
 
-**Ce qui manque** : ce sont des monades à `rank_C = 2`, et ni `hoppe_sur_espace`
-ni `f_sans_point_base` n'y sont généralisés. h⁰(V) = 0 est démontré, la
-**stabilité complète ne l'est pas** — donc pas encore de verdict SURVIT.
+**Le verdict de stabilité est tombé (§5.36), et il est négatif.** Une fois le
+chemin wedge généralisé à `rank_C = 2` :
+
+```
+#7745 :  f generique  ->  h0(wedge^2 V) = 0
+         f equivariant ->  h0(wedge^2 V) = 1     pour les quatre lambda
+```
+
+h⁰(∧²V) ≠ 0 avec c₁(V) = 0 place un sous-faisceau de pente 0 dans un fibré de
+pente 0 : **`#7745` n'est pas stable**, et cette conclusion ne dépend d'aucune
+polarisation. Trois générations, oui ; un fibré stable, non.
+
+`#6947` rend le même chiffre, mais son modèle n'est pas établi sur la charge
+`c₁ + b₄` — `dim(S/I) = 84` contre `χ = 76`, rien de certifié — donc **pas de
+verdict** tant que le bloc `corr` du §5.32 n'est pas construit. `#6836` (×2) et
+`#7735` restent hors de portée pour la même raison.
 
 ---
 
@@ -212,7 +227,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        45 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        46 tests — À LANCER AVANT CHAQUE SCAN
 ├── resume_cible.py            dépouillement d'un scan ciblé
 ├── diagnostic_par.py          diagnostic du parallélisme (coût, Pool, contexte)
 ├── validate_cohomology.py     harnais de validation du socle
@@ -2547,6 +2562,144 @@ trompe de coupable est aussi coûteux qu'un contrôle muet.**
 
 ---
 
+### 5.36 La route ℤ₄ se ferme sur `#7745` — et le blocage n'était pas où la §0 le situait
+
+**Ce qui manquait était plus petit que prévu, et ailleurs.** La §0 posait la
+généralisation de `hoppe_sur_espace` et `f_sans_point_base` à `rank_C = 2`
+comme le verrou des candidats ℤ₄. Elle était nécessaire ; elle n'était pas
+suffisante, et elle n'était pas le verrou.
+
+#### La généralisation, et pourquoi elle était plus facile qu'annoncé
+
+Le chemin wedge ne dépendait pas du rang de C **dans les mathématiques**. La
+suite
+
+```
+0 -> wedge^p V -> wedge^p B -> wedge^{p-1} B (x) C
+```
+
+est exacte à gauche quel que soit ce rang : le noyau de la contraction est
+∧ᵖV, point, ce qu'on lit sur un scindage local B = V ⊕ C. La restriction
+était dans l'implémentation, qui construisait la cible comme `∧^{p-1}B(c)`
+avec un seul `c`. Pour rank_C = r, `∧^{p-1}B ⊗ C = ⊕_j ∧^{p-1}B(c_j)` : la
+cible s'indexe par (J, j) et la contraction gagne une composante par **ligne**
+de f. Les sources, les signes et les degrés `degres[j][i]` étaient déjà là.
+
+Pour la surjectivité, c'est en revanche un vrai changement d'énoncé. À
+rank_C = 1, f est surjective ssi les fᵢ n'ont pas de zéro commun. À rank_C = r,
+f(y) doit être de rang r, donc l'un des **mineurs maximaux r×r** ne doit pas
+s'annuler. Le certificat `J_d = R_d` s'applique tel quel à l'idéal des
+mineurs, et r = 1 en est le cas particulier — les mineurs *sont* les fᵢ. La
+matrice de multiplication par un mineur est **composée** à partir de celles
+des entrées de f (`_bloc_produit`), puis combinée par Leibniz : aucune
+multiplication de polynômes n'est introduite dans la base monomiale complète,
+donc aucune arithmétique nouvelle à tester.
+
+Deux gardes `len(c) == 1` subsistaient dans `equivariance_f.analyser`. Sans
+les lever, la généralisation n'aurait produit aucun verdict : c'est là que les
+candidats du §2.3 étaient renvoyés `indéterminé`.
+
+#### Le 46ᵉ test : quatre valeurs connues d'avance à rank_C = 2
+
+Sur la quintique, toutes charges nulles, `B = O⁵`, `C = O²` et
+`f = [[1,0,0,0,0], [0,1,0,0,0]]` est la projection sur les deux premiers
+facteurs. Alors `V = ker f = O³` **exactement**, d'où
+
+```
+h0(wedge^1 V) = 3     h0(wedge^2 V) = 3     h0(wedge^3 V) = 1
+et le mineur (0,1) vaut 1, donc la surjectivite doit se certifier
+```
+
+**Contrôle négatif construit sur la même monade** : avec
+`f = [[1,0,0,0,0], [0,0,0,0,0]]`, tous les mineurs 2×2 sont nuls — le
+certificat doit refuser — et `V = O⁴` donne h⁰(∧¹V) = 4, pas 3.
+
+L'ancienne implémentation échouait ce test : avec une cible indexée par J
+seul, elle aurait la dimension 1 au lieu de 2 à p = 1, et h⁰(∧¹V) sortirait à
+4 pour un f de rang 2.
+
+#### Le verdict, et le contraste qui le rend crédible
+
+```
+#7745  [1,1,7]  Z4, sigma = [1,0,2]   rank_B 5, rank_C 2, rank_V 3
+  f GENERIQUE    (espace de dim 68) :  h0(V) = 0   h0(wedge^2 V) = 0
+  f EQUIVARIANT  (espace de dim 17) :  h0(V) = 0   h0(wedge^2 V) = 1
+                                       pour les QUATRE lambda
+  controle : h0(wedge^3 V) = 1 = h0(det V) = h0(O_Y)
+  les deux chemins independants (specialise et general) : 1 / 1
+```
+
+**`#7745` n'est pas stable.** h⁰(∧²V) ≠ 0 avec c₁(V) = 0 donne un
+sous-faisceau de pente 0 dans un fibré de pente 0 : la conclusion ne dépend
+d'aucun choix de polarisation, contrairement aux verdicts du §5.13.
+
+Ce qui rend le chiffre crédible n'est pas le chiffre, c'est le **contraste** :
+la même fonction rend 0 sur l'espace entier et 1 sur le sous-espace
+équivariant, dans le même anneau. Un module qui rendrait toujours 1 serait
+démenti par la première ligne. C'est le motif du §5.3 — l'existence d'un f
+équivariant ne dit rien de la stabilité — et h⁰ étant semi-continu
+supérieurement, la valeur ne peut que **monter** sur un lieu spécial. Elle
+monte de 0 à 1.
+
+**La réserve mod p, et ce qu'on lui a opposé.** Un rang calculé mod p ne peut
+que chuter, donc un h⁰ **nul** mod p est concluant et un h⁰ **non nul** ne
+l'est pas — la réserve joue exactement dans le sens défavorable à une
+élimination. Mesure : quatre premiers (30029, 50033, 70009, 100049) × deux
+tirages de l'idéal covariant × quatre λ, soit **32 évaluations, toutes à 1**,
+avec le générique à 0 chaque fois dans le même anneau. Il faudrait que quatre
+premiers dégénèrent de la même façon sans toucher le calcul générique. Ce
+n'est pas une démonstration en caractéristique nulle ; c'est la même réserve
+que porte tout verdict de ce dépôt, ici mesurée au lieu d'être supposée.
+
+Au passage, la surjectivité de f n'est certifiée sur aucun λ (« aucun degré
+concluant »). Sans effet ici : Hoppe élimine avant.
+
+#### Le vrai blocage : une charge sur 27
+
+Les trois candidats sont **hors domaine**, et pour une raison qu'un booléen ne
+laissait pas voir : **une seule charge sur 27**, la même partout —
+`c₁ + b₄`, de degré 2 sur le facteur P⁷.
+
+Pour `#7745`, elle se rattrape par une référence extérieure au critère de
+degré :
+
+```
+degre (1,1,2) :  chi = 76,  h1 = h2 = h3 = 0 CERTIFIES  ->  h0 = 76 exactement
+                 modele dim(S/I) = 76
+```
+
+Les deux tombent juste, et c'est précisément le contrôle `dim(S/I) == h⁰` que
+le §5.29 propose comme durcissement de `domaine_valide`. Le modèle est donc
+établi sur les 27 charges, et le verdict tient.
+
+Pour `#6947`, non :
+
+```
+degre (0,0,1,1,2) :  chi = 76   mais   dim(S/I) = 84   et RIEN n'est certifie
+```
+
+L'écart de **8** est exactement la cohomologie supérieure non comptée — les
+classes de Čech manquantes du §5.32. Le calcul y rend la même chose
+(h⁰(∧²V) = 1 sur les quatre λ, deux réalisations), et **ce n'est pas compté
+comme un verdict** : sur un modèle non établi, un 1 peut être un 0.
+
+**Conséquence pour la suite.** Le bloc `corr` du §5.32 n'est pas le second
+item d'une liste : c'est ce qui décide de `#6947`. Les deux travaux de la §0
+n'étaient pas indépendants, et le premier a servi à localiser le second.
+
+#### Ce que ça ajoute au §8
+
+| | ce qui devenait invisible | ce que le silence faisait croire |
+|---|---|---|
+| §5.36 | « hors domaine » rendu comme un **booléen** | 1 charge sur 27 et 27 sur 27 lues comme la même chose — et un verrou cherché du côté du rang de C |
+
+`charges_non_certifiees` **nomme** les charges au lieu de rendre un booléen.
+Sans ce changement, on aurait conclu que les candidats ℤ₄ étaient hors de
+portée du modèle, alors qu'il leur manquait une charge — rattrapable par χ
+dans un cas sur trois.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -2614,7 +2767,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 45 tests, ~5 min. À lancer après chaque modification,
+**`tests_regression.py` — 46 tests, ~5 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -2645,6 +2798,7 @@ Huit ajouts de la session « équivariance » :
 | empreinte du code | le contenu distingue, les fins de ligne et les dates non | oui : une empreinte qui ne hache que les *noms* de fichiers passe les deux dernières exigences et doit échouer la première |
 | verdicts contradictoires | « hors domaine » et « ok » sur la même identité, sans aucun recalcul | oui, **deux verdicts opposés** : le fichier sale doit être vu, le propre doit passer |
 | classification de σ | **#6947** porte les deux réponses : ℤ₂ fixe les facteurs, ℤ₄ les permute | oui : aucune classification constante ne passe les deux volets |
+| rank_C = 2, valeurs connues d'avance | `V = O³` explicite : h⁰(∧^p V) = 3, 3, 1, et le mineur (0,1) certifie | oui, **deux verdicts opposés** : un f de rang 1 donne 4 et voit ses mineurs refusés — et l'ancienne cible à une composante donnait 4 au lieu de 3 |
 
 Trois d'entre eux figent **deux verdicts opposés**, et trois confrontent le code à
 une valeur connue d'avance : 125 pour la quintique, 1 pour det V = O, 3 + 3 pour
@@ -2693,6 +2847,7 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | §5.35 | la partition par **nom de groupe**, là où σ est une propriété de la **réalisation** | « 27 couples touchés » — il y en avait 48, et 5 039 réalisations |
 | §5.35 | le **contrôle d'orbite ne compare qu'à l'intérieur d'une session** ; `if a and a != b_` sur une liste vide | un repli « vérifié » par des comparaisons qui n'ont jamais eu lieu |
 | **§5.35** | **un fichier de résultats ne porte pas la version du code qui l'a écrit** | un fichier homogène, là où trois versions cohabitaient — 4 049 candidats écartés à tort |
+| **§5.36** | **« hors domaine » rendu comme un booléen** | 1 charge sur 27 et 27 sur 27 lues comme la même chose — et le verrou des ℤ₄ cherché du côté du rang de C |
 
 La dernière est d'une espèce à part : rien n'y devient vide. Le contrôle interne
 et l'objet contrôlé partagent le défaut, donc le contrôle le confirme. Un filtre
@@ -2754,6 +2909,12 @@ python empreinte_code.py scan_wilson5/results_equivariance_f.jsonl
 
 # comparer deux balayages, dans les DEUX sens
 python -u comparer_scans.py scan_wilson4 scan_wilson5 --sortie comparaison.json
+
+# verdict de stabilite sur les candidats Z4 du 2.3 (rank_C = 2, §5.36)
+#   nomme les charges non certifiees au lieu de rendre un booleen ; --forcer
+#   calcule quand meme, en estampillant chaque ligne d'une reserve.
+python -u verdict_z4.py cicyquotients.m cicylist.txt
+python -u verdict_z4.py cicyquotients.m cicylist.txt --forcer
 
 # classer sigma realisation par realisation, et designer les lots a refaire
 #   s'arrete si ses ancres ou l'empreinte du checkpoint ne tombent pas juste

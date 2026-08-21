@@ -1,0 +1,454 @@
+[
+ {
+  "cicy": 6947,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   3,
+   2,
+   4
+  ],
+  "lambda": [
+   1
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     0,
+     0,
+     1,
+     1,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 6947,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   3,
+   2,
+   4
+  ],
+  "lambda": [
+   9026
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     0,
+     0,
+     1,
+     1,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 6947,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   3,
+   2,
+   4
+  ],
+  "lambda": [
+   -9026
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     0,
+     0,
+     1,
+     1,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 6947,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   3,
+   2,
+   4
+  ],
+  "lambda": [
+   -1
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     0,
+     0,
+     1,
+     1,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 6947,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   3,
+   2,
+   4
+  ],
+  "lambda": [
+   1
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     1,
+     1,
+     0,
+     0,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 6947,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   3,
+   2,
+   4
+  ],
+  "lambda": [
+   9026
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     1,
+     1,
+     0,
+     0,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 6947,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   3,
+   2,
+   4
+  ],
+  "lambda": [
+   -9026
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     1,
+     1,
+     0,
+     0,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 6947,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   3,
+   2,
+   4
+  ],
+  "lambda": [
+   -1
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     1,
+     1,
+     0,
+     0,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 7745,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   2
+  ],
+  "lambda": [
+   1
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     1,
+     1,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 7745,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   2
+  ],
+  "lambda": [
+   9026
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     1,
+     1,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 7745,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   2
+  ],
+  "lambda": [
+   -9026
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     1,
+     1,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ },
+ {
+  "cicy": 7745,
+  "realisation": 1,
+  "sigma": [
+   1,
+   0,
+   2
+  ],
+  "lambda": [
+   -1
+  ],
+  "h0_generique": 0,
+  "h0_equivariant": 0,
+  "hoppe": false,
+  "hoppe_valeurs": {
+   "1": 0,
+   "2": 1
+  },
+  "hoppe_motif": "h0(wedge^2 V) = 1",
+  "surjectif": false,
+  "surjectif_degre": null,
+  "stable_demontre": false,
+  "charges_non_certifiees": [
+   [
+    "c1+b4",
+    [
+     1,
+     1,
+     2
+    ]
+   ]
+  ],
+  "charges_totales": 27,
+  "sous_reserve": true
+ }
+]

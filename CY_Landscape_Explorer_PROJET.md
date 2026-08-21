@@ -12,12 +12,11 @@
 
 ## 0. Où reprendre — point d'entrée
 
-**État au 21 août 2026.** Dépôt à `d67e9ed` **plus les travaux des §5.38 et de
-la garde `F ∩ Y`, non encore commités**. `python tests_regression.py` avant
-toute chose : **46 tests**, dont deux ajoutés depuis `d67e9ed` et qui n'ont
-encore été passés qu'**isolément** — la suite complète n'a pas été relancée
-jusqu'au bout. C'est la première chose à faire. Environnement : Windows,
-PowerShell (`;` et non `&&`, `Tee-Object`, `python -u`).
+**État au 21 août 2026.** Dépôt à `35f08c0` (§5.38), **46 tests verts**,
+`python tests_regression.py` avant toute chose. `lieu_de_base_rv3.jsonl` a été
+**régénéré** sous la garde `F ∩ Y` : 944 lignes sur 944 portent `F·Y = 2` et
+`dim F = K`. Environnement : Windows, PowerShell (`;` et non `&&`, `Tee-Object`,
+`python -u`).
 
 **Le catalogue n'a plus de reliquat indéterminé.** Toute ligne λ porte un
 verdict : survivante, éliminée par Hoppe, ou éliminée parce que `V = ker f`
@@ -30,17 +29,14 @@ le seul écart entre le catalogue et son fichier de référence.
 
 **Le travail suivant, dans l'ordre :**
 
-1. **Relancer `tests_regression.py` en entier**, puis relancer
-   `lieu_de_base_rv3.py` sur les 472 : la garde `F ∩ Y` est nouvelle, et le
-   fichier `lieu_de_base_rv3.jsonl` actuel a été écrit sans elle — il ne porte
-   donc pas le champ qui justifie ses 944 verdicts. Environ 12 min. **Ne pas le
-   corriger à la main : ce serait la maladie du §5.35.**
-2. **Porter les verdicts des §5.36 à §5.38 dans `scan_wilson5`.** 68 lignes λ
+1. **Porter les verdicts des §5.36 à §5.38 dans `scan_wilson5`.** 68 lignes λ
    survivantes à rank_C = 2 que le fichier compte encore comme indéterminées,
    944 + 34 lignes à éliminer parce que `f` y a un lieu de base démontré **sur
    Y**. C'est un balayage, donc une décision de coût — et le marquage de
-   version signalera, correctement, un fichier à deux états du code.
-3. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
+   version signalera, correctement, un fichier à deux états du code. **Par un
+   vrai balayage, jamais en rapiéçant le JSONL : ce serait la maladie du
+   §5.35.**
+2. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
    §5.32). C'est ce qui décide de `#6947` : sa charge `c₁ + b₄` donne
    `dim(S/I) = 84` contre `χ = 76`, rien de certifié, et les 8 unités
    manquantes sont exactement les classes de Čech à construire (§5.36).

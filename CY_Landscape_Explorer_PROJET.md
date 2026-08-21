@@ -12,7 +12,8 @@
 
 ## 0. Où reprendre — point d'entrée
 
-**État au 21 août 2026.** Dépôt à `35f08c0` (§5.38), **46 tests verts**,
+**État au 21 août 2026.** Dépôt à `35f08c0` (§5.38) et au commit de
+documentation qui le suit, **46 tests verts**,
 `python tests_regression.py` avant toute chose. `lieu_de_base_rv3.jsonl` a été
 **régénéré** sous la garde `F ∩ Y` : 944 lignes sur 944 portent `F·Y = 2` et
 `dim F = K`. Environnement : Windows, PowerShell (`;` et non `&&`, `Tee-Object`,
@@ -26,6 +27,30 @@ n'est pas un fibré (§5.37, §5.38).
 seule version du code, zéro identité contradictoire, zéro discordance d'orbite,
 couverture complète (§5.35). **Mais il n'est plus à jour**, et c'est maintenant
 le seul écart entre le catalogue et son fichier de référence.
+
+**Où vivent les résultats, et lesquels git protège.**
+
+| fichier | ce qu'il porte | suivi |
+|---|---|---|
+| `scan_wilson5/results_equivariance_f.jsonl` | le balayage de référence — 505 601 lignes, une seule version du code (§5.35) | **non** |
+| `tous_indetermines.jsonl` | les verdicts `rank_C = 2` obtenus après la levée des gardes (§5.36, §5.37) | oui |
+| `lieu_de_base_rv3.jsonl` | 944 lignes : `f` a un lieu de base **sur Y**, témoin resubstitué (§5.37) | oui |
+| `rencontre_F_Y.jsonl` | le nombre d'intersection `F·Y` des 472, qui justifie les 944 (§5.37) | oui |
+| `lieu_de_base_rc2.jsonl` | 34 lignes : même verdict à `rank_C = 2`, par chute du rang (§5.38) | oui |
+| `echantillon_rank_c2.jsonl`, `verdict_z4.json` | les mesures de coût et le verdict `#7745` (§5.36) | oui |
+| `comparaison_w4_w5.json` | la comparaison des deux côtés qui a clos le §5.35 | oui |
+
+**Le seul fichier que git ne protège pas est celui qui fait foi.** Le
+`.gitignore` écarte `scan_*/`, ce qui était juste tant qu'un scan n'était qu'une
+sortie reproductible : ici, `scan_wilson5` a coûté plusieurs heures et le §5.35
+a établi qu'un balayage refait n'est pas garanti identique — c'est tout son
+propos. Le supprimer ou l'écraser est donc irréversible en pratique. À décider :
+le suivre explicitement (`git add -f`), ou l'archiver hors dépôt. En attendant,
+**ne jamais passer `--reset` sur `scan_wilson5`, et ne pas nettoyer les
+`scan_*` sans l'exclure nommément.**
+
+Les autres `scan_*`, `output_*`, `test_*` et les `*.log` sont, eux, de vraies
+sorties jetables — environ 600 Mo dont le dépôt n'a pas besoin.
 
 **Le travail suivant, dans l'ordre :**
 
@@ -2759,7 +2784,8 @@ valeurs dominantes : {1:0, 2:1} x1865   {1:0, 2:0} x102   {1:1} x34
 
 **34 candidats, 68 lignes λ, sur 25 CICYs distinctes** passent le critère de
 Hoppe complet *et* voient leur surjectivité certifiée. Le fichier en comptait
-**zéro** sur 212 819 lignes. Ce n'était pas un résultat d'absence : c'était
+**zéro** sur ses 212 819 lignes **à `rank_C = 2`** — soit 505 601 lignes au
+total, dont 468 703 en état `ok`. Ce n'était pas un résultat d'absence : c'était
 `len(c) == 1`.
 
 Et l'élimination de `#7745` (§5.36) n'était pas un cas isolé : la signature

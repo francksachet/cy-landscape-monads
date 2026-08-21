@@ -64,6 +64,16 @@ def charges_non_certifiees(amb, cfg, b, c):
     for j, y in enumerate(c):
         ch += [(f'c{j}+b{i}', [y[k] + x[k] for k in range(m)])
                for i, x in enumerate(b)]
+    # Les cases de f, c_j - b_i, quand elles sont de degre >= 0. Une case de
+    # degre negatif est identiquement nulle et n'a rien a certifier (§5.28).
+    # Les omettre donnait un DENOMINATEUR FAUX : 27 la ou `domaine_valide`
+    # en regarde 36. Le numerateur etait juste, la fraction non -- et c'est
+    # la fraction qu'on lit.
+    for j, y in enumerate(c):
+        for i, x in enumerate(b):
+            d = [y[k] - x[k] for k in range(m)]
+            if all(v >= 0 for v in d):
+                ch.append((f'c{j}-b{i}', d))
     ko = []
     for nom, x in ch:
         r = koszul_cohomology_ex(amb, cfg, x)

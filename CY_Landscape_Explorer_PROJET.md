@@ -2657,7 +2657,7 @@ concluant »). Sans effet ici : Hoppe élimine avant.
 #### Le vrai blocage : une charge sur 27
 
 Les trois candidats sont **hors domaine**, et pour une raison qu'un booléen ne
-laissait pas voir : **une seule charge sur 27**, la même partout —
+laissait pas voir : **une seule charge sur 36**, la même partout —
 `c₁ + b₄`, de degré 2 sur le facteur P⁷.
 
 Pour `#7745`, elle se rattrape par une référence extérieure au critère de
@@ -2670,7 +2670,7 @@ degre (1,1,2) :  chi = 76,  h1 = h2 = h3 = 0 CERTIFIES  ->  h0 = 76 exactement
 
 Les deux tombent juste, et c'est précisément le contrôle `dim(S/I) == h⁰` que
 le §5.29 propose comme durcissement de `domaine_valide`. Le modèle est donc
-établi sur les 27 charges, et le verdict tient.
+établi sur les 36 charges, et le verdict tient.
 
 Pour `#6947`, non :
 
@@ -2691,7 +2691,7 @@ n'étaient pas indépendants, et le premier a servi à localiser le second.
 
 | | ce qui devenait invisible | ce que le silence faisait croire |
 |---|---|---|
-| §5.36 | « hors domaine » rendu comme un **booléen** | 1 charge sur 27 et 27 sur 27 lues comme la même chose — et un verrou cherché du côté du rang de C |
+| §5.36 | « hors domaine » rendu comme un **booléen** | 1 charge sur 36 et 36 sur 36 lues comme la même chose — et un verrou cherché du côté du rang de C |
 
 `charges_non_certifiees` **nomme** les charges au lieu de rendre un booléen.
 Sans ce changement, on aurait conclu que les candidats ℤ₄ étaient hors de
@@ -2847,7 +2847,7 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | §5.35 | la partition par **nom de groupe**, là où σ est une propriété de la **réalisation** | « 27 couples touchés » — il y en avait 48, et 5 039 réalisations |
 | §5.35 | le **contrôle d'orbite ne compare qu'à l'intérieur d'une session** ; `if a and a != b_` sur une liste vide | un repli « vérifié » par des comparaisons qui n'ont jamais eu lieu |
 | **§5.35** | **un fichier de résultats ne porte pas la version du code qui l'a écrit** | un fichier homogène, là où trois versions cohabitaient — 4 049 candidats écartés à tort |
-| **§5.36** | **« hors domaine » rendu comme un booléen** | 1 charge sur 27 et 27 sur 27 lues comme la même chose — et le verrou des ℤ₄ cherché du côté du rang de C |
+| **§5.36** | **« hors domaine » rendu comme un booléen** | 1 charge sur 36 et 36 sur 36 lues comme la même chose — et le verrou des ℤ₄ cherché du côté du rang de C |
 
 La dernière est d'une espèce à part : rien n'y devient vide. Le contrôle interne
 et l'objet contrôlé partagent le défaut, donc le contrôle le confirme. Un filtre

@@ -12,7 +12,7 @@
 
 ## 0. Où reprendre — point d'entrée
 
-**État au 21 août 2026.** Dépôt à `<commit du §5.35>`, **45 tests verts**,
+**État au 21 août 2026.** Dépôt à `a382950` (§5.35), **45 tests verts**,
 `python tests_regression.py` avant toute chose. Environnement : Windows,
 PowerShell (`;` et non `&&`, `Tee-Object`, `python -u`).
 

@@ -87,6 +87,13 @@ from cy_landscape.core.sections import (basis_multi, rref_mod, _mult_matrix,
                                         domaine_valide)
 from cy_landscape.data.parse_oxford import load_oxford_file
 from wilson_match import parse_braun, parse_cicylist, apparier
+from empreinte_code import empreinte_code
+
+# Version du code qui produit les verdicts de ce run. Portee par CHAQUE
+# ligne ecrite (`_code`), et affichee a la reprise. Elle n'entre PAS dans
+# l'empreinte du checkpoint : voir l'en-tete de `empreinte_code.py` --
+# l'y mettre ferait effacer le JSONL a la premiere virgule modifiee.
+_CODE, _N_FICHIERS_CODE = empreinte_code()
 
 
 def h0_V_generique(anneau, b_charges, c_charges, p, rng, n_essais=5):
@@ -400,6 +407,8 @@ class Progression:
         tmp = self.chemin + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump({'empreinte': self.empreinte,
+                       # DECLARATIF, jamais compare : voir `empreinte_code`.
+                       'code': _CODE,
                        'lots': [[list(k), v]
                                 for k, v in sorted(self.faits.items())],
                        'compteurs': self.compteurs}, f)
@@ -752,6 +761,8 @@ def main():
             # dont le compte correspond exactement au checkpoint.
             n_avant = n_apres = 0
             vus = {}
+            versions = {}          # {empreinte de code: nombre de lignes}
+            n_sans_lot = 0
             if taille:
                 with open(dst, encoding='utf-8') as f:
                     for ligne in f:
@@ -759,12 +770,17 @@ def main():
                             continue
                         n_avant += 1
                         try:
-                            lot = json.loads(ligne).get('_lot')
+                            x_ = json.loads(ligne)
                         except json.JSONDecodeError:
                             continue
+                        lot = x_.get('_lot')
+                        v_ = x_.get('_code')
+                        versions[v_] = versions.get(v_, 0) + 1
                         if lot is not None:
                             k_ = tuple(lot)
                             vus[k_] = vus.get(k_, 0) + 1
+                        else:
+                            n_sans_lot += 1
             avant_restriction = len(prog.faits)
             prog.faits = {
                 f: n for f, n in prog.faits.items()
@@ -798,6 +814,26 @@ def main():
                 print(f"  JSONL filtre : {n_avant} lignes -> {n_apres} "
                       f"({n_avant - n_apres} appartenaient a des lots non "
                       f"termines)")
+            # VERSIONS DU CODE PRESENTES DANS LE FICHIER. Un fichier qui
+            # melange plusieurs versions se lit comme un fichier homogene
+            # tant que personne ne le compte. Ici, on le compte.
+            print(f"  Code de ce run : {_CODE} "
+                  f"({_N_FICHIERS_CODE} fichiers surveilles)")
+            autres = {k: v for k, v in versions.items() if k != _CODE}
+            if autres:
+                print(f"  /!\\ LIGNES D'UNE AUTRE VERSION DU CODE :")
+                for k_, v_ in sorted(autres.items(), key=lambda x: -x[1]):
+                    print(f"        {v_:>8} lignes   "
+                          f"{k_ if k_ else '(avant le marquage des versions)'}")
+                print(f"      Elles sont CONSERVEES. Leurs verdicts peuvent "
+                      f"venir d'un code corrige depuis.")
+                print(f"      `python retirer_lots.py <dossier> --verifier` "
+                      f"et `portee_substitution.py` pour decider.")
+            if n_sans_lot:
+                print(f"  {n_sans_lot} lignes sans `_lot` (format sequentiel) : "
+                      f"conservees inconditionnellement,")
+                print(f"      elles ne peuvent pas etre invalidees "
+                      f"selectivement par la reprise.")
         elif os.path.exists(prog.chemin) or taille:
             # Un checkpoint existait mais n'est pas utilisable : le DIRE.
             # Repartir de zero en silence ferait passer un recommencement
@@ -809,6 +845,8 @@ def main():
 
     print(f"\n{'=' * 96}")
     print("  EQUIVARIANCE DE f  --  polynomes covariants, puis stabilite restreinte")
+    print(f"  code {_CODE} ({_N_FICHIERS_CODE} fichiers) -- porte par chaque "
+          f"ligne, champ `_code`")
     print(f"{'=' * 96}")
     print(f"  {'CICY':>5} {'jauge':>7} {'rk':>2} {'groupe':<11} {'lambda':>14} "
           f"{'dim eq':>6} {'N':>5} {'h0 gen':>6} {'h0 eq':>5} "
@@ -1061,6 +1099,10 @@ def main():
                 if replique:
                     y['representant'] = rs[i_rep].get('b_charges')
                 y['_lot'] = list(id_lot)
+                # VERSION DU CODE. Sans ce champ, une ligne calculee par un
+                # programme corrige depuis ne se distingue d'une ligne
+                # actuelle par rien du tout -- et la reprise la reconduit.
+                y['_code'] = _CODE
                 # REGLE DES FILTRES : chaque ligne dit sur combien de
                 # realisations son verdict porte. Sans ce champ, une absence
                 # serait ininterpretable.

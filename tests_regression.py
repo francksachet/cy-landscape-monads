@@ -3268,6 +3268,209 @@ def t_h1_reguliere_z4():
             f"H^1(V) = {N_GEN // 4} x representation reguliere")
 
 
+@test("empreinte du code : contenu oui, fins de ligne et dates non")
+def t_empreinte_code():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    Un fichier de resultats doit dire QUELLE VERSION du code a produit chacune
+    de ses lignes. Sans cela, une reprise reconduit en silence des verdicts
+    calcules par un programme corrige depuis -- constate dans `scan_wilson4` :
+    41 identites (CICY, b, c) y portent A LA FOIS « hors domaine » et « ok »,
+    parce que leur tranche 0 datait de l'epoque ou `rank_c_max` valait 1.
+
+    Trois exigences, et deux d'entre elles s'opposent :
+
+      - le CONTENU compte : changer une instruction doit changer l'empreinte ;
+      - les FINS DE LIGNE ne comptent pas : ce depot a cinq fichiers suivis
+        qui ne different de HEAD que par CRLF/LF. Une empreinte sensible a
+        cela crierait a chaque `git checkout` sous Windows ;
+      - les DATES ne comptent pas : toucher un fichier sans le modifier ne
+        doit rien changer, sinon la moindre copie de dossier invaliderait
+        tout.
+
+    CONTROLE NEGATIF CONSTRUIT : une empreinte qui ne hacherait que les NOMS
+    de fichiers -- l'erreur naturelle -- passe les deux dernieres exigences et
+    echoue la premiere. Le test verifie qu'elle echoue bien : sans ce volet,
+    une empreinte creuse passerait pour une empreinte.
+    """
+    import tempfile, hashlib
+    from empreinte_code import empreinte_code, fichiers_surveilles
+
+    with tempfile.TemporaryDirectory() as d:
+        os.makedirs(os.path.join(d, 'cy_landscape', 'core'))
+        os.makedirs(os.path.join(d, 'cy_landscape', 'data'))
+
+        def ecrire(rel, octets):
+            with open(os.path.join(d, rel), 'wb') as f:
+                f.write(octets)
+
+        A = b'def domaine_valide(a, b, rank_c_max=1):\n    return True\n'
+        B = b'def domaine_valide(a, b, rank_c_max=None):\n    return True\n'
+        ecrire('equivariance_f.py', b'x = 1\n')
+        ecrire('cy_landscape/core/sections.py', A)
+
+        e_a, n = empreinte_code(d)
+        assert n == 2, f"{n} fichiers surveilles au lieu de 2"
+        assert empreinte_code(d)[0] == e_a, \
+            "l'empreinte n'est pas stable d'un appel a l'autre"
+
+        # les dates ne comptent pas
+        os.utime(os.path.join(d, 'cy_landscape/core/sections.py'),
+                 (1_600_000_000, 1_600_000_000))
+        assert empreinte_code(d)[0] == e_a, \
+            "l'empreinte a bouge alors que seule la DATE a change"
+
+        # les fins de ligne ne comptent pas
+        ecrire('cy_landscape/core/sections.py', A.replace(b'\n', b'\r\n'))
+        assert empreinte_code(d)[0] == e_a, \
+            "l'empreinte a bouge sur un simple CRLF/LF"
+
+        # le contenu compte -- c'est exactement le changement qui a produit
+        # les reliques du fichier reel
+        ecrire('cy_landscape/core/sections.py', B)
+        e_b, _ = empreinte_code(d)
+        assert e_b != e_a, \
+            ("rank_c_max 1 -> None n'a pas change l'empreinte : elle ne "
+             "distingue pas les deux versions qui ont pollue scan_wilson4")
+
+        # un module ajoute compte aussi
+        ecrire('cy_landscape/core/hoppe_fast.py', b'y = 0\n')
+        e_c, n3 = empreinte_code(d)
+        assert n3 == 3 and e_c != e_b, "un module ajoute n'a rien change"
+
+        # CONTROLE NEGATIF : l'empreinte creuse, sur les seuls noms
+        def creuse(racine):
+            return hashlib.sha256(
+                ''.join(fichiers_surveilles(racine)).encode()).hexdigest()[:12]
+        ecrire('cy_landscape/core/sections.py', A)
+        c_a = creuse(d)
+        ecrire('cy_landscape/core/sections.py', B)
+        assert creuse(d) == c_a, \
+            ("le controle negatif est mal construit : l'empreinte creuse "
+             "distingue deja les deux contenus")
+
+    return ("contenu distingue, CRLF et mtime ignores, empreinte creuse "
+            "prise en defaut")
+
+
+@test("verdicts contradictoires : une identite ne peut pas etre hors domaine ET ok")
+def t_verdicts_contradictoires():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    « Hors domaine » dit que le modele S/I ne represente pas H^0 pour ces
+    charges. « ok » dit qu'on a calcule des verdicts dessus. Les deux sur la
+    MEME identite (CICY, b_charges, c_charges) ne sont pas une imprecision :
+    c'est la preuve, interne au fichier et sans aucun recalcul, que deux
+    versions du code y ont ecrit.
+
+    Mesure sur `scan_wilson4` avant reprise a neuf : 41 identites, 4 CICYs.
+
+    DEUX VERDICTS OPPOSES : le fichier sale doit etre vu, le fichier propre
+    doit passer. Un detecteur qui crie toujours echoue le second volet ; un
+    detecteur muet echoue le premier.
+    """
+    import tempfile, json as _json
+    from retirer_lots import contradictions
+
+    b = [[1, 0], [0, 1]]
+    c = [[1, 1]]
+
+    def ecrire(chemin, lignes):
+        with open(chemin, 'w', encoding='utf-8') as f:
+            for x in lignes:
+                f.write(_json.dumps(x) + '\n')
+
+    commun = {'cicy': 2357, 'b_charges': b, 'c_charges': c}
+    ok = dict(commun, etat='ok', groupe='Z2', survit=False)
+    hors = dict(commun, etat='hors domaine (modele S/I non valide)', groupe='-')
+    autre = {'cicy': 480, 'b_charges': b, 'c_charges': c,
+             'etat': 'hors domaine (modele S/I non valide)', 'groupe': '-'}
+
+    with tempfile.TemporaryDirectory() as d:
+        sale = os.path.join(d, 'sale.jsonl')
+        propre = os.path.join(d, 'propre.jsonl')
+        ecrire(sale, [hors, ok, ok, autre])
+        ecrire(propre, [ok, ok, autre])
+
+        vu = contradictions(sale)
+        assert len(vu) == 1, \
+            f"{len(vu)} contradiction(s) vue(s) au lieu d'une seule"
+        assert vu[0][0] == 2357, f"mauvaise identite designee : {vu[0][0]}"
+        # #480 n'est hors domaine QUE : ce n'est pas une contradiction, et le
+        # detecteur ne doit pas l'inventer.
+        assert not contradictions(propre), \
+            ("le detecteur crie sur un fichier sans contradiction -- un "
+             "detecteur qui crie toujours ne demontre rien")
+
+    return "1 contradiction vue sur le fichier sale, 0 sur le propre"
+
+
+@test("classification de sigma : #6947 fixe ses facteurs en Z2, les permute en Z4")
+def t_sigma_classification():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    Le perimetre de la reparation du 5.34 repose entierement sur une question :
+    pour CETTE realisation de CE groupe, sigma permute-t-il deux facteurs de
+    l'ambiant ? Une classification qui repondrait « non » partout declarerait
+    le depot sain ; une qui repondrait « oui » partout ferait recalculer
+    cinquante heures pour rien. Les deux erreurs sont silencieuses.
+
+    Le temoin est choisi pour qu'aucune reponse constante ne passe : la MEME
+    CICY, #6947, porte les deux reponses. Son Z2 fixe chaque facteur -- c'est
+    pourquoi le 5.6 est intact et pourquoi la reference Z2 ne pouvait pas
+    reveler le defaut. Son Z4 permute -- c'est le cas que le defaut faussait.
+
+    La geometrie etant la meme des deux cotes, un ecart ne peut venir que de
+    l'action lue, ce qui est exactement ce qu'on veut tester.
+    """
+    ici = os.path.dirname(os.path.abspath(__file__))
+    for f in ('cicyquotients.m', 'cicylist.txt'):
+        if not os.path.exists(os.path.join(ici, f)):
+            return f"{f} absent — test ignore"
+    from portee_substitution import statut_sigma, ID, PERM
+    from cy_landscape.core.braun_symmetry import parse_symmetries
+    from cy_landscape.data.parse_oxford import load_oxford_file
+    from wilson_match import parse_braun, parse_cicylist, apparier
+
+    NUM = 6947
+    E = {e['num']: e for e in load_oxford_file(os.path.join(ici, 'cicylist.txt'))}
+    e = E.get(NUM)
+    assert e is not None, f"CICY {NUM} absente de cicylist.txt"
+    SYM = parse_symmetries(os.path.join(ici, 'cicyquotients.m'))
+    braun = parse_braun(os.path.join(ici, 'cicyquotients.m'))
+    cl = parse_cicylist(os.path.join(ici, 'cicylist.txt'))
+    corr, _, _ = apparier(braun, cl)
+    inv = {v: k for k, v in corr.items()}
+    assert NUM in inv, f"CICY {NUM} non appariee"
+
+    vu = {}
+    for sy in SYM[inv[NUM]]['symetries']:
+        vu.setdefault(sy['nom'], set()).add(statut_sigma(sy, e['ambient']))
+
+    assert 'Z2' in vu and 'Z4' in vu, \
+        f"#{NUM} devrait porter Z2 et Z4 chez Braun ; vu {sorted(vu)}"
+    assert vu['Z2'] == {ID}, \
+        (f"#{NUM} Z2 classe {sorted(vu['Z2'])} au lieu de « {ID} » -- or le "
+         f"5.6 tient precisement parce que sigma y est l'identite")
+    assert PERM in vu['Z4'], \
+        (f"#{NUM} Z4 classe {sorted(vu['Z4'])} sans « {PERM} » -- or c'est le "
+         f"cas que le defaut du 5.34 faussait")
+
+    # CONTROLE NEGATIF CONSTRUIT, dans les deux sens : les deux volets
+    # ci-dessus portent sur la meme CICY et exigent des reponses opposees.
+    # Aucune classification constante ne peut donc les satisfaire tous deux.
+    for constante in (ID, PERM):
+        faux = {nom: {constante} for nom in vu}
+        assert not (faux['Z2'] == {ID} and PERM in faux['Z4']), \
+            (f"une classification qui repond « {constante} » partout passe "
+             f"les deux volets : le temoin ne mord pas")
+
+    return f"#{NUM} : Z2 -> {ID}, Z4 -> {PERM}, aucune reponse constante ne passe"
+
+
 # ======================================================================
 
 def main():

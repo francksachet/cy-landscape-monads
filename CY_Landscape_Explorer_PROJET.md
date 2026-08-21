@@ -6,46 +6,59 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 42 tests.
+> non une propriété des candidats, et la suite compte 45 tests.
 
 ---
 
 ## 0. Où reprendre — point d'entrée
 
-**État au 17 août 2026.** Dépôt à `4b4a2d0` (§5.34), **42 tests verts**,
+**État au 21 août 2026.** Dépôt à `<commit du §5.35>`, **45 tests verts**,
 `python tests_regression.py` avant toute chose. Environnement : Windows,
 PowerShell (`;` et non `&&`, `Tee-Object`, `python -u`).
 
+**Le balayage qui fait foi est désormais `scan_wilson5`.** 5 636 lots sur
+5 636, 505 601 lignes, **une seule version du code** (`45a6ce28793e`, portée
+par chaque ligne), **zéro** identité contradictoire, **zéro** discordance
+d'orbite sur 18 couples réellement comparés, et la couverture complète —
+56 134 réalisations sur 56 134. C'est le premier fichier de ce projet dont on
+puisse dire ces cinq choses à la fois.
+
+`scan_wilson4` est conservé comme base de comparaison mais **ne doit plus
+servir de référence** : il mélange au moins trois versions du code (§5.35).
+
 **Le travail suivant, dans l'ordre :**
 
-1. **Recalculer les 27 couples (CICY, Γ) touchés par le §5.34.** C'est le seul
-   point où le dépôt contient aujourd'hui des chiffres qu'on sait faux : 1 224
-   lignes de `scan_wilson4/results_equivariance_f.jsonl`, dont **213 SURVIT**,
-   ont été calculées avec une `matrice_substitution` fausse. Il faut retirer
-   sélectivement ces lignes **et** les lots correspondants du checkpoint
-   (`progress_equivariance_f.json`), puis relancer sur ces CICYs seules —
-   `--cicy` n'accepte pour l'instant qu'un entier, à étendre en liste.
-   CICYs concernées : #22, #261, #343, #1262, #1295, #1298, #1441, #1701,
-   #2317, #2360, #2543, #2544, #3929, #4071, #4109, #5273, #5311, #5425,
-   #5958, #6173, #6204, #6225, #6229, #6231, #6724, #6804, #7279.
-2. **Généraliser `hoppe_sur_espace` et `f_sans_point_base` à `rank_C = 2`**,
+1. **Généraliser `hoppe_sur_espace` et `f_sans_point_base` à `rank_C = 2`**,
    pour que les candidats ℤ₄ du §2.3 — trois générations déjà acquises —
    puissent recevoir un vrai verdict de stabilité.
-3. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
+2. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
    §5.32) : sans lui, `#6836` et `#7735` restent hors de portée, et les
    dimensions exactes de H¹ sur les charges hors modèle aussi.
-4. **Fermer les trous de couverture de `scan_wilson4`** : 51 % des réalisations
-   non testées, 2 lots manquants sur 3 716.
 
 **Deux questions ouvertes, moins urgentes** : durcir `domaine_valide` avec
 `dim(S/I) == h⁰` (casse 5 tests, décision non prise, §5.29) ; et réexaminer
 `#6715`, dont une charge a `dim(S/I) ≠ h⁰`.
 
+**Fait depuis le 17 août**, et les deux points ont grossi en cours de route :
+
+- les **27 couples touchés par le §5.34** — en réalité **48 couples et 5 039
+  réalisations**, le tableau de portée du §5.34 ayant compté par nom de
+  groupe là où σ est une propriété de la réalisation ;
+- les **trous de couverture** (51 % des réalisations non testées), fermés par
+  le même run.
+
+Et un défaut trouvé en chemin, plus profond que les deux : un fichier de
+résultats ne portait pas la version du code qui l'avait écrit, donc les
+reprises reconduisaient en silence des verdicts d'un programme corrigé depuis
+— **4 049 candidats écartés à tort**. Recalcul complet, marquage de version,
+et la mesure des deux côtés : **aucun verdict retourné, 34 733 SURVIT
+inchangés**. Tout est au §5.35.
+
 **La discipline qui a trouvé tous les défauts** est au §8 — en particulier la
-*règle des filtres*. Le §5.34 en donne la forme la plus dure : le contrôle
-interne et l'objet contrôlé partageaient le même défaut, donc le contrôle le
-confirmait. Seule une référence **extérieure au module** peut faire tomber ce
-genre de chose.
+*règle des filtres*. Le §5.34 en donne la forme la plus dure (le contrôle et
+l'objet contrôlé partagent le défaut) ; le §5.35 en ajoute une autre, où le
+contrôle crie juste mais désigne le mauvais coupable — suivre son avis coûtait
+plusieurs jours et ne réparait rien.
 
 ---
 
@@ -93,39 +106,47 @@ plafonne à Pati–Salam ou SU(5) flipped. Aller plus loin demande un Γ plus gr
 
 Ils sont **intacts après le §5.34** : σ y est l'identité.
 
-### 2.2 Le balayage qui fait foi — `scan_wilson4`
+### 2.2 Le balayage qui fait foi — `scan_wilson5`
 
 Le générateur qui a produit `#6890` et `#6947` tirait **dix** configurations au
 hasard dans une famille de 2 201 (§5.23). La famille est maintenant **énumérée**.
-Le scan de référence est `scan_wilson4`, et il ne ressemble pas au précédent :
+Le scan de référence est `scan_wilson5` (§5.35), recalculé de bout en bout dans
+un seul état du code :
 
 | | |
 |---|---|
-| lignes de verdict | 174 847 |
-| **SURVIT** | **33 099** — toutes SO(10), rang 4, n_gen(X/Γ) = 3 |
+| lignes de verdict | 505 601 |
+| **SURVIT** | **34 733** — toutes SO(10), rang 4, n_gen(X/Γ) = 3 |
 | (B, C) distincts | 2 857, sur **91 CICYs** |
 | orbites sous Aut(config) (§5.25) | **691** |
-| violations d'intégrité | **0** |
-| groupes | ℤ₂ : 32 533 · ℤ₂×ℤ₂ : 566 |
+| discordances d'orbite | **0** sur 18 couples réellement comparés |
+| versions du code présentes | **1** (`45a6ce28793e`) |
+| identités contradictoires | **0** |
+| couverture | **56 134 réalisations sur 56 134** |
+| groupes | ℤ₂ : 32 533 · ℤ₂×ℤ₂ : 2 200 |
 
 `#6890` y donne 12 orbites, `#6947` 1, `#6715` 3. Autrement dit : les deux
 candidats du §2.1 ne sont pas rares, ils étaient **seuls engendrés**.
 
-**Trois réserves, chiffrées :**
+Les trois nombres qui décrivent le catalogue — 2 857 couples (B, C), 91 CICYs,
+691 orbites — sont **identiques** à ceux de `scan_wilson4`, et les 32 533 SURVIT
+ℤ₂ aussi, au chiffre près. Tout l'écart tient dans ℤ₂×ℤ₂, qui passe de 566 à
+2 200 : ce sont des réalisations qui n'avaient jamais été testées, pas des
+verdicts corrigés (§5.35).
 
-1. **§5.34 — 27 couples (CICY, Γ) sur 129 sont à recalculer**, soit 1 224 lignes
-   dont **213 SURVIT (0,6 %)**, parce que `matrice_substitution` était fausse
-   quand Γ permute des facteurs projectifs. Dans les deux sens : un SURVIT peut
-   être usurpé, un éliminé peut l'avoir été à tort. **C'est le premier travail à
-   reprendre.**
-2. **§5.27 — les 8 candidats ℤ₂×ℤ₂ du premier dépouillement sont retirés** :
+**Deux réserves, chiffrées :**
+
+1. **§5.27 — les 8 candidats ℤ₂×ℤ₂ du premier dépouillement sont retirés** :
    leur relèvement est *projectif* (générateurs anticommutants), l'espace dit
-   « équivariant » n'en était pas un. Les 566 lignes ℤ₂×ℤ₂ ci-dessus sont à lire
-   avec cette réserve.
-3. **Couverture incomplète** : 51 % des réalisations n'ont pas été testées, et
-   2 lots sur 3 716 manquent. Le scan n'est pas un résultat d'absence.
+   « équivariant » n'en était pas un. Cette réserve porte désormais sur
+   **2 200 lignes** et non 566 : la couverture complète l'a rendue plus lourde,
+   pas moins.
+2. **La chaîne amont n'a pas été rejouée.** `scan_wilson5` recalcule l'étape
+   `equivariance_f` seule ; le scan, l'audit et le triage restent ceux du
+   15 août, dans `scan_wilson4` — d'où vient `results_equivariant.jsonl`, copié
+   tel quel. Le marquage de version ne couvre donc que la dernière étape.
 
-Enfin, un seul maillon manque à ces 33 099 lignes pour être des verdicts
+Enfin, un seul maillon manque à ces 34 733 lignes pour être des verdicts
 complets au sens du §2.1 : le critère de Hoppe **suffisant** et la surjectivité
 n'y sont pas repassés candidat par candidat.
 
@@ -191,7 +212,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        42 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        45 tests — À LANCER AVANT CHAQUE SCAN
 ├── resume_cible.py            dépouillement d'un scan ciblé
 ├── diagnostic_par.py          diagnostic du parallélisme (coût, Pool, contexte)
 ├── validate_cohomology.py     harnais de validation du socle
@@ -2314,6 +2335,13 @@ Les 27 couples touchés portent sur les CICYs #22, #261, #343, #1262, #1295,
 **0,6 % des SURVIT** sont concernés — dans les deux sens : un SURVIT peut être
 usurpé, un éliminé peut l'avoir été à tort.
 
+> **Ce tableau est exact sous sa règle, et faux comme mesure de portée.** Il
+> partitionne par **nom de groupe** ; σ est une propriété de la **réalisation**.
+> Les 21 couples mixtes — au moins une réalisation de chaque sorte — sont donc
+> rangés ici du côté « intacts », avec leurs lignes fausses. La portée réelle
+> est de **48 couples et 5 039 réalisations**. Le tableau est conservé tel quel
+> parce que l'effacer effacerait la trace de l'erreur : voir le **§5.35**.
+
 Le §5.6 (`#6890`, `#6947` en ℤ₂, 3+3) est intact : σ y est l'identité. C'est
 précisément pourquoi la référence ℤ₂ ne pouvait pas révéler le défaut.
 
@@ -2325,6 +2353,197 @@ précisément pourquoi la référence ℤ₂ ne pouvait pas révéler le défaut
 - `t_h1_reguliere_z4` : sur `#7745` (le cas réel, σ = [1,0,2]), la covariance
   matricielle exacte, la stabilité de l'image, et H¹(V) = 3 × régulière pour les
   quatre λ — pas seulement « invariant = 3 ».
+
+---
+
+### 5.35 Un fichier de résultats n'a pas de version, donc il en a plusieurs
+
+**Le §5.34 a mesuré sa propre portée, et s'est trompé.** Son tableau range
+102 couples (CICY, groupe) du côté « intacts » et 27 du côté « à recalculer ».
+Cette partition compte par **nom de groupe**. Or σ est une propriété de la
+**réalisation** : une même CICY porte jusqu'à 368 réalisations d'un même
+groupe, et rien n'oblige toutes à permuter — ou aucune.
+
+La réconciliation, sur les 174 847 lignes de `scan_wilson4` :
+
+| catégorie | couples | lignes | SURVIT |
+|---|---|---|---|
+| aucune réalisation ne permute | 81 | 132 330 | 30 384 |
+| **mixte : au moins une de chaque** | **21** | **33 424** | **2 502** |
+| pseudo-couples (CICY, `-`), aucun calcul | 111 | 7 869 | 0 |
+| toutes permutent — les « 27 » du §5.34 | 27 | 1 224 | 213 |
+
+81 + 21 = 102, et 132 330 + 33 424 + 7 869 = 173 623, et 30 384 + 2 502 =
+32 886 : les trois colonnes du §5.34 se retrouvent au chiffre près. Les
+**21 couples mixtes** — #480 `Z2 x Z2` en a 112 permutantes sur 368, #2568
+`Z2 x Z2` 16 sur 32 — étaient donc rangés du côté sain, avec leurs lignes
+fausses. Au niveau qui compte, celui de la réalisation : **5 039 réalisations
+permutantes déjà calculées**, non 960 ; **12 627 lignes à jeter**, non 1 224 ;
+**1 979 SURVIT** concernés, non 213.
+
+Ce n'est pas un filtre faux. C'est un filtre juste appliqué à la mauvaise
+granularité — et son silence se lisait comme une sélection, exactement comme
+au §8.
+
+#### La réparation, et ce qu'elle a découvert
+
+Deux outils, tous deux tenus par des références extérieures :
+`portee_substitution.py` classe σ réalisation par réalisation et **refuse de
+servir** s'il ne reproduit pas les trois nombres du §5.34 ; `retirer_lots.py`
+retire les lots fautifs du checkpoint et leurs lignes du JSONL, et **refuse
+d'écrire** si sa règle de comptage ne reproduit pas les compteurs du
+checkpoint sur le fichier intact. Deux gardes de plus s'imposaient :
+
+- l'identifiant de lot `('T', k, t)` ne veut rien dire hors de la
+  configuration exacte du run — `--cicy`, `--replier-orbites`,
+  `--controle-orbites`, `--taille-lot` entrent dans l'empreinte du
+  checkpoint. Le script la recalcule et s'arrête si elle ne correspond pas ;
+- l'interprétation se fait sur le **sur-ensemble sans plafond**. Le plafond
+  `--max-realisations` n'entre pas dans l'empreinte — délibérément, pour que
+  le lever n'invalide rien — donc un checkpoint peut mélanger des lots venus
+  de plafonds différents. Celui de `scan_wilson4` en contenait un.
+
+C'est en interprétant ces identifiants qu'on a trouvé mieux, ou pire.
+
+#### Le vrai défaut : le fichier mélangeait trois versions du code
+
+Le contrôle d'orbite du §5.25 a crié : **6 discordances sur 15**, et
+`equivariance_f` a conclu « le repli est INVALIDE, relancer sans
+`--replier-orbites` » — soit 14 945 candidats au lieu de 3 698 tâches,
+plusieurs jours. Cinq des six discordances avaient la même forme :
+représentant « hors domaine », membre de contrôle « ok ».
+
+Vérification : `domaine_valide` est vrai sur **tous** les membres des cinq
+orbites — 2/2, 2/2, 6/6, 2/2, 12/12 — et la forme canonique est unique dans
+chacune. Le repli n'était pas en cause. La tâche 940 (#2357) donnait ceci :
+
+```
+('T', 940, 0)   x1     hors domaine (modele S/I non valide)
+('T', 940, 1)   x64    ok
+('T', 940, 2)   x64    ok
+('T', 940, 3)   x64    ok
+```
+
+Mêmes charges, même fonction, quatre tranches d'une même tâche : la première
+déclare le modèle invalide, les trois autres calculent 192 verdicts dessus.
+Impossible à code constant. Ces candidats ont deux `c_charges` — ils tombaient
+sous l'ancien `rank_c_max = 1`, contrainte levée depuis (§6). **Les lignes de
+la tranche 0 étaient des reliques d'un code d'avant**, reconduites par chaque
+reprise parce que leur lot était enregistré et leur compte de lignes juste.
+
+L'empreinte du checkpoint couvre le fichier d'entrée et quatre options. **Pas
+le code.** Une reprise reconduit donc sans un mot des verdicts produits par un
+programme corrigé depuis. Mesuré sans aucun recalcul : **41 identités
+(CICY, b, c) portant à la fois « hors domaine » et « ok »**, sur 4 CICYs.
+C'est une contradiction interne dans un fichier de résultats.
+
+Ce défaut n'était détectable que sur `domaine_valide`, parce que c'est une
+fonction pure qu'on peut rejouer pour rien. Les verdicts coûteux — h⁰
+équivariant, Hoppe, surjectivité — issus des mêmes vieux lots ne se revoient
+pas à ce prix, et rien ne disait qu'ils fussent épargnés. Une troisième
+chirurgie ciblée aurait corrigé ce qu'on savait voir et laissé ouverte la
+question « quoi d'autre est périmé ? », sur le fichier qui porte le résultat
+principal du projet.
+
+#### Marquer, et recalculer à neuf
+
+`empreinte_code.py` hache le chemin et le contenu des 34 fichiers dont une
+modification peut changer un verdict. Chaque ligne écrite porte désormais
+`_code` ; la reprise affiche la répartition des versions présentes.
+
+**Elle n'entre pas dans l'empreinte du checkpoint, et ce n'est pas un oubli.**
+Un checkpoint invalide fait *effacer* le JSONL : y mettre le code
+signifierait qu'une correction de commentaire détruit trente heures de calcul.
+On déclare, on ne refuse pas. Les fins de ligne et les dates sont normalisées
+— ce dépôt a cinq fichiers suivis qui ne diffèrent de HEAD que par CRLF/LF.
+
+Puis `scan_wilson5` : le balayage entier, sans plafond, dans un seul état du
+code, **~30 h à 7 cœurs** — 21 968 réalisations en 11 h 33 mesurées sur la
+session précédente donnent 1,89 s par réalisation, et il y en a 56 134. Rien
+n'a été détruit : `scan_wilson4` reste en place.
+
+| contrôle de recette | `scan_wilson4` | `scan_wilson5` |
+|---|---|---|
+| lots terminés | 5 548 / 5 636 | **5 636 / 5 636** |
+| discordances d'orbite | 6 sur 15 | **0 sur 18** |
+| versions du code présentes | ≥ 3 | **1** (`45a6ce28793e`) |
+| identités contradictoires | 41 | **0** |
+| lignes sans `_lot` | 55 170 | **0** |
+| compteurs vs fichier | d'accord | d'accord |
+
+Les 29 lots de contrôle ont été rejoués **dans une session unique, contre un
+JSONL complet** (`retirer_lots.py --refaire-controles`). C'est nécessaire :
+le contrôle relit les lignes du représentant *dans le fichier*, et
+`if a and a != b_` laisse passer une liste vide. Un balayage fractionné vide
+donc le contrôle sans le dire — le défaut du §5.25 sous une troisième forme.
+
+#### Ce que les deux contaminations ont coûté, mesuré dans les deux sens
+
+`comparer_scans.py` compare deux balayages par identité (CICY, b, c) et
+déclare les deux sens. Contre le fichier **d'avant toute réparation** :
+
+| | |
+|---|---|
+| identités communes | 14 943, aucune d'un seul côté |
+| « hors domaine » avant, **évaluées** après | **4 049**, sur 83 CICYs |
+| SURVIT qu'elles apportent | **0** |
+| sens inverse (évaluées puis écartées) | **0** |
+| identités dont le compte de SURVIT change | 10 |
+| SURVIT gagnés / perdus | **1 634 / 0** |
+| total | 33 099 → **34 733** |
+
+Et la mesure qui sépare les causes. Les 10 identités ont **toutes** une
+couverture étendue : #480 passe de 128 à 1 472 lignes, #2357 de 16
+réalisations testées sur 88 à 88 sur 88. Restreint aux **10 347 identités
+dont la couverture est identique des deux côtés**, le multi-ensemble des
+(groupe, λ, `survit`, `etat`) est **rigoureusement le même** — comparé comme
+multi-ensemble et non comme compte, précisément pour qu'un gain et une perte
+qui se compensent dans la même identité ne puissent pas se cacher.
+
+**Donc : aucun verdict de ce balayage n'a été retourné.** Les 1 634 SURVIT
+supplémentaires viennent tous de réalisations jamais testées — la couverture,
+pas la correction. Les 4 049 candidats écartés à tort n'apportent aucun
+survivant.
+
+**Inerte sur le verdict binaire ne veut pas dire inoffensif.** Le défaut du
+§5.34 faussait la décomposition de H¹(V) — {4,1,1,6} au lieu de la
+représentation régulière — et éliminait λ = ±i par artefact. Ce sont
+exactement les quantités dont dépendent les trois candidats ℤ₄ du §2.3 et le
+§5.33. Le drapeau `survit` n'a pas bougé ; ce qu'il y a derrière, si.
+
+Au passage, le travail n°4 de la §0 est clos : les 50,8 % de réalisations
+jamais testées n'existent plus, **56 134 sur 56 134**.
+
+#### Trois tests l'attachent (43ᵉ, 44ᵉ, 45ᵉ)
+
+- `t_empreinte_code` : le contenu distingue, les fins de ligne et les dates
+  non. **Contrôle négatif construit** : une empreinte qui ne hacherait que
+  les *noms* de fichiers — l'erreur naturelle — passe les deux dernières
+  exigences ; le test vérifie qu'elle échoue bien sur la première.
+- `t_verdicts_contradictoires` : **deux verdicts opposés**, le fichier sale
+  doit être vu et le propre doit passer. Un détecteur muet échoue le premier
+  volet, un détecteur qui crie toujours échoue le second.
+- `t_sigma_classification` : sur **#6947**, la même CICY porte les deux
+  réponses — son ℤ₂ fixe chaque facteur (c'est pourquoi le §5.6 est intact et
+  pourquoi la référence ℤ₂ ne pouvait pas révéler le défaut), son ℤ₄ permute.
+  Aucune classification constante ne passe les deux volets.
+
+#### Ce que ça ajoute au §8
+
+Trois motifs, et le troisième est d'une espèce nouvelle :
+
+| | ce qui devenait invisible | ce que le silence faisait croire |
+|---|---|---|
+| §5.35 | la partition par **nom de groupe** là où σ est une propriété de la **réalisation** | « 27 couples touchés » — il y en avait 48, et 5 039 réalisations |
+| §5.35 | le **contrôle d'orbite ne compare qu'à l'intérieur d'une session** ; `if a and a != b_` sur une liste vide | un repli « vérifié » par des comparaisons qui n'ont jamais eu lieu |
+| **§5.35** | **un fichier de résultats ne porte pas la version du code qui l'a écrit** | un fichier homogène, là où trois versions cohabitaient |
+
+Le dernier n'est pas un filtre qui se vide : c'est un fichier qui n'a aucun
+moyen de dire d'où viennent ses lignes. Aucune relecture du code ne l'aurait
+trouvé — les 4 049 candidats écartés à tort n'existaient que dans le fichier.
+Et le contrôle qui a crié accusait le mauvais objet : suivre son avis à la
+lettre coûtait plusieurs jours et ne réparait rien. **Un contrôle qui se
+trompe de coupable est aussi coûteux qu'un contrôle muet.**
 
 ---
 
@@ -2395,7 +2614,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 42 tests, ~5 min. À lancer après chaque modification,
+**`tests_regression.py` — 45 tests, ~5 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -2423,6 +2642,9 @@ Huit ajouts de la session « équivariance » :
 | multidegrés du certificat | marges figées sur `#21` (ancien : tout négatif ; nouveau : tout viable), vérification EXACTE par `dimY` et non par l'estimation, non-régression sur les degrés certifiants de `#6890` et `#6947`, et **le zéro falsy** : une marge nulle doit être conservée | oui, trois fois, dont le bug lui-même — réintroduire `marge or -1` fait tomber le volet des degrés certifiants |
 | pente des sous-faisceaux | degré au point J = v contre Riemann-Roch ; **deux verdicts opposés construits** ; et un cas réel où un témoin existe hors grille, qui doit rendre `None` et non `False` | oui, de trois façons : convertir les `None` en `False`, renvoyer toujours `True`, renvoyer toujours `False` |
 | extensions énumérées | comptage par convolution contre comptage par énumération ; **contrôle négatif construit** : le tirage doit être vu perdre 245/281 extensions d'un cran de `max_charge` au suivant | oui, dans les deux sens : revenir au tirage casse la monotonie ; rendre le tirage monotone casse le contrôle négatif |
+| empreinte du code | le contenu distingue, les fins de ligne et les dates non | oui : une empreinte qui ne hache que les *noms* de fichiers passe les deux dernières exigences et doit échouer la première |
+| verdicts contradictoires | « hors domaine » et « ok » sur la même identité, sans aucun recalcul | oui, **deux verdicts opposés** : le fichier sale doit être vu, le propre doit passer |
+| classification de σ | **#6947** porte les deux réponses : ℤ₂ fixe les facteurs, ℤ₄ les permute | oui : aucune classification constante ne passe les deux volets |
 
 Trois d'entre eux figent **deux verdicts opposés**, et trois confrontent le code à
 une valeur connue d'avance : 125 pour la quintique, 1 pour det V = O, 3 + 3 pour
@@ -2468,6 +2690,9 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | **§5.27** | **l'espace « équivariant » d'un relèvement PROJECTIF** | **8 candidats à ℤ₂×ℤ₂** — les seuls survivants, et les seuls obstrués |
 | **§5.29** | **`domaine_valide` certifie h⁰ sans vérifier dim(S/I) = h⁰** | un modèle qui sous-compte les sections d'un facteur 2, sans un mot |
 | **§5.34** | **`verifier_descente` contrôlait S_g dans la base mélangée que S_g avait elle-même produite** | un écart « exactement nul » sur une action qui n'était pas l'action géométrique |
+| §5.35 | la partition par **nom de groupe**, là où σ est une propriété de la **réalisation** | « 27 couples touchés » — il y en avait 48, et 5 039 réalisations |
+| §5.35 | le **contrôle d'orbite ne compare qu'à l'intérieur d'une session** ; `if a and a != b_` sur une liste vide | un repli « vérifié » par des comparaisons qui n'ont jamais eu lieu |
+| **§5.35** | **un fichier de résultats ne porte pas la version du code qui l'a écrit** | un fichier homogène, là où trois versions cohabitaient — 4 049 candidats écartés à tort |
 
 La dernière est d'une espèce à part : rien n'y devient vide. Le contrôle interne
 et l'objet contrôlé partagent le défaut, donc le contrôle le confirme. Un filtre
@@ -2508,6 +2733,36 @@ les voyant passer qu'on a trouvé le vrai angle mort.
 ```bash
 # avant tout
 python tests_regression.py
+
+# ---------------------------------------------------------------------
+# CHAINE DU 5.35 -- integrite d'un fichier de resultats
+# ---------------------------------------------------------------------
+# balayage complet a neuf dans scan_wilson5, fractionnable a volonte.
+# La ligne de commande y est FIGEE : --cicy, --replier-orbites,
+# --controle-orbites et --taille-lot entrent dans l'empreinte du
+# checkpoint, et une empreinte qui ne correspond plus fait EFFACER le JSONL.
+.\run_propre.ps1                            # premiere fois (45 tests inclus)
+.\run_propre.ps1 -SansTests                 # sessions suivantes
+.\run_propre.ps1 -SansTests -ControleFinal  # une fois tous les lots 'T' faits
+
+# recette : compteurs d'accord, UNE SEULE version du code, ZERO identite
+# portant a la fois « hors domaine » et « ok ». A passer apres chaque session.
+python retirer_lots.py scan_wilson5 --verifier
+
+# quelle version du code a ecrit quoi
+python empreinte_code.py scan_wilson5/results_equivariance_f.jsonl
+
+# comparer deux balayages, dans les DEUX sens
+python -u comparer_scans.py scan_wilson4 scan_wilson5 --sortie comparaison.json
+
+# classer sigma realisation par realisation, et designer les lots a refaire
+#   s'arrete si ses ancres ou l'empreinte du checkpoint ne tombent pas juste
+python -u portee_substitution.py cicyquotients.m cicylist.txt <dossier> \
+       --replier-orbites --sortie portee.json
+
+# retirer selectivement des lots fausses, puis relancer la meme commande
+python -u retirer_lots.py <dossier>              # a blanc
+python -u retirer_lots.py <dossier> --appliquer  # ecrit, une seule fois
 
 # validation du socle sur les vraies CICYs
 python validate_cohomology.py cicylist.txt --n-cicys 60 --max-charge 4

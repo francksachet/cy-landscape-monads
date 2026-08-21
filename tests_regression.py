@@ -3379,6 +3379,105 @@ def t_wedgep_rank_c2():
             "surjectivite certifiee puis refusee ; les deux chemins d'accord")
 
 
+@test("lieu de base : l'equivariance en impose un, le f generique non")
+def t_lieu_de_base_rv3():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    472 candidats de `scan_wilson5` passaient le critere de Hoppe complet et ne
+    voyaient JAMAIS leur surjectivite certifiee -- 944 lignes sur 944. Un
+    certificat qui echoue ne demontre rien : il fallait savoir si f a
+    reellement un lieu de base, ou si la liste de degres s'arretait trop tot.
+    Les deux lectures donnent des conclusions inverses -- eliminer les 472, ou
+    les garder en attente.
+
+    La strate est UNE SEULE configuration repetee : b = 3 x O(e_k) + O(e_i+e_j)
+    et c = O(3e_k + e_i + e_j) sur trois facteurs P^1, l'ideal etant inerte aux
+    degres en jeu. La reponse est alors exacte : au zero du cubique binaire
+    f_4, les trois formes (1,1) restantes sortent DIAGONALES sous la contrainte
+    equivariante, et trois formes a.x0.y0 + d.x1.y1 s'annulent toutes en
+    x = (1,0), y = (0,1).
+
+    DEUX VERDICTS OPPOSES, meme candidat, meme fonction :
+      - f tire dans le SOUS-ESPACE EQUIVARIANT -> lieu de base, temoin verifie
+      - f tire dans l'ESPACE ENTIER            -> aucun lieu de base
+    Un detecteur qui crierait toujours echoue le second volet ; un detecteur
+    muet echoue le premier.
+
+    Et le temoin n'est pas cru sur parole : les quatre f_i sont RECALCULEES au
+    point exhibe, et doivent toutes s'annuler.
+    """
+    ici = os.path.dirname(os.path.abspath(__file__))
+    for f in ('cicyquotients.m', 'cicylist.txt'):
+        if not os.path.exists(os.path.join(ici, f)):
+            return f"{f} absent - test ignore"
+    from lieu_de_base_rv3 import analyser
+    from cy_landscape.core.braun_symmetry import (parse_symmetries, ordres_rt,
+                                                  matrice_mod_p)
+    from cy_landscape.core.gamma_action import (choisir_premier,
+                                                racine_primitive)
+    from cy_landscape.core.covariant_ring import (resoudre_covariants,
+                                                  tirer_covariants,
+                                                  CovariantRing)
+    from cy_landscape.core.equivariant_monad import espace_f_equivariant
+    from cy_landscape.data.parse_oxford import load_oxford_file
+    from wilson_match import parse_braun, parse_cicylist, apparier
+
+    NUM = 4078
+    b = [[0, 0, 1, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 1, 0, 0, 0],
+         [1, 1, 0, 0, 0, 0]]
+    c = [[1, 1, 3, 0, 0, 0]]
+    E = {x['num']: x for x in load_oxford_file(os.path.join(ici, 'cicylist.txt'))}
+    e = E.get(NUM)
+    assert e is not None, f"CICY {NUM} absente"
+    amb, cfg = e['ambient'], np.asarray(e['config'])
+    SYM = parse_symmetries(os.path.join(ici, 'cicyquotients.m'))
+    corr, _, _ = apparier(parse_braun(os.path.join(ici, 'cicyquotients.m')),
+                          parse_cicylist(os.path.join(ici, 'cicylist.txt')))
+    inv = {v: k for k, v in corr.items()}
+    assert NUM in inv, f"CICY {NUM} non appariee"
+    sy = [s for s in SYM[inv[NUM]]['symetries'] if s['nom'] == 'Z2']
+    assert sy, f"pas de Z2 chez Braun pour #{NUM}"
+    sym = sy[0]
+    ordres = sorted(ordres_rt(sym['coord']) | ordres_rt(sym['poly']) | {2})
+    p, _ = choisir_premier(ordres, minimum=30011)
+    rac = {k: racine_primitive(p, k) for k in ordres}
+    Mc = [matrice_mod_p(x, p, rac) for x in sym['coord']]
+    Np = [matrice_mod_p(x, p, rac) for x in sym['poly']]
+    res = resoudre_covariants(amb, cfg, Mc, Np, p)
+    assert res is not None, "sigma non extractible"
+    co = tirer_covariants(res['par_convention']['N']['base'], res['offsets'],
+                          res['dims'], p, np.random.RandomState(0))
+    A = CovariantRing(amb, cfg, co, p)
+    out = espace_f_equivariant(A, amb, b, c, Mc, p)
+    assert out['etat'] == 'ok' and out['solutions'], out['etat']
+    s = out['solutions'][0]
+    assert s['dim'] < out['dim_totale'], \
+        ("le sous-espace equivariant n'est pas propre : les deux volets "
+         "porteraient sur le meme espace et le test ne mordrait pas")
+
+    r = analyser(A, amb, b, c, s['base'], out['offsets'], out['dims'],
+                 out['degres'], p, np.random.RandomState(7))
+    assert r.get('etat') == 'ok', r.get('etat')
+    assert r['lieu_de_base'], \
+        ("aucun lieu de base sur le sous-espace equivariant -- or c'est la "
+         "raison pour laquelle 944 lignes sur 944 ne se certifient jamais")
+    assert r['temoin_verifie'], f"temoin non verifie : {r.get('verification')}"
+    assert all(v == 0 for v in r['verification'].values()), \
+        f"les f_i ne s'annulent pas au point exhibe : {r['verification']}"
+
+    plein = np.eye(out['dim_totale'], dtype=np.int64)
+    g = analyser(A, amb, b, c, plein, out['offsets'], out['dims'],
+                 out['degres'], p, np.random.RandomState(11))
+    assert g.get('etat') == 'ok', g.get('etat')
+    assert not g['lieu_de_base'], \
+        ("un f GENERIQUE se voit attribuer un lieu de base : le detecteur "
+         "crie sur tout, et le premier volet ne demontrait donc rien")
+
+    return (f"#{NUM} : equivariant -> lieu de base en z={r['z']} x={r['x']} "
+            f"y={r['y']}, quatre f_i nulles ; generique -> aucun")
+
+
 # ======================================================================
 
 def main():

@@ -6,62 +6,67 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 46 tests.
+> non une propriété des candidats, et la suite compte 47 tests.
 
 ---
 
 ## 0. Où reprendre — point d'entrée
 
-**État au 21 août 2026.** Dépôt à `0b9dadd` (§5.36), **46 tests verts**,
+**État au 21 août 2026.** Dépôt à `<commit du §5.37>`, **47 tests verts**,
 `python tests_regression.py` avant toute chose. Environnement : Windows,
 PowerShell (`;` et non `&&`, `Tee-Object`, `python -u`).
 
-**Le balayage qui fait foi est `scan_wilson5`.** 5 636 lots sur 5 636, 505 601
-lignes, **une seule version du code**, **zéro** identité contradictoire,
-**zéro** discordance d'orbite sur 18 couples réellement comparés, couverture
-complète — 56 134 réalisations sur 56 134 (§5.35). `scan_wilson4` n'en garde
-que la chaîne amont (scan, audit, triage) et **ne doit pas servir de
-référence** : il mélange trois versions du code.
+**Le balayage qui fait foi est `scan_wilson5`** — 5 636 lots sur 5 636, une
+seule version du code, zéro identité contradictoire, zéro discordance
+d'orbite, couverture complète (§5.35). **Mais il n'est plus à jour** : les
+verdicts des §5.36 et §5.37 vivent dans `tous_indetermines.jsonl` et
+`lieu_de_base_rv3.jsonl`, pas dans le fichier de référence.
 
-**Le travail suivant — il n'en reste qu'un, et il décide de quelque chose :**
+**Le travail suivant, dans l'ordre :**
 
-1. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
-   §5.32). Ce n'était pas un item de liste : c'est ce qui décide de `#6947`.
-   Sa charge `c₁ + b₄` donne `dim(S/I) = 84` contre `χ = 76`, rien de
-   certifié — les 8 unités manquantes sont précisément les classes de Čech à
-   construire. Sans lui, `#6947`, `#6836` et `#7735` restent sans verdict de
-   stabilité (§5.36), et les dimensions exactes de H¹ sur les charges hors
-   modèle aussi.
+1. **Porter les verdicts des §5.36 et §5.37 dans `scan_wilson5`.** 68 lignes λ
+   survivantes à rank_C = 2 (34 candidats, 25 CICYs) que le fichier compte
+   encore comme indéterminées, et 944 lignes à éliminer parce que `f` y a un
+   lieu de base démontré. C'est un balayage, donc une décision de coût — et le
+   marquage de version signalera, correctement, un fichier à deux états du
+   code.
+2. **Le lieu de base à `rank_C = 2`**, pour les 34 lignes λ qui passent Hoppe
+   sans certificat de surjectivité — le dernier reliquat indéterminé du
+   catalogue. Le lieu de base y est celui des **mineurs 2×2**, pas des `fᵢ` :
+   `lieu_de_base_rv3.py` en donne la forme, pas le contenu.
+3. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
+   §5.32). C'est ce qui décide de `#6947` : sa charge `c₁ + b₄` donne
+   `dim(S/I) = 84` contre `χ = 76`, rien de certifié, et les 8 unités
+   manquantes sont exactement les classes de Čech à construire (§5.36).
 
 **Deux questions ouvertes, moins urgentes** : durcir `domaine_valide` avec
 `dim(S/I) == h⁰` (casse 5 tests, décision non prise, §5.29 — c'est ce contrôle
 qui a validé la charge litigieuse de `#7745`, §5.36) ; et réexaminer `#6715`,
 dont une charge a `dim(S/I) ≠ h⁰`.
 
-**Fait depuis le 17 août**, et chacun des trois points a grossi en route :
+**Fait depuis le 17 août :**
 
-- les **27 couples touchés par le §5.34** — en réalité **48 couples et 5 039
-  réalisations**, le tableau de portée du §5.34 ayant compté par nom de groupe
-  là où σ est une propriété de la réalisation (§5.35) ;
-- les **trous de couverture** (51 % des réalisations non testées), fermés par
-  le même run ;
-- la **généralisation à `rank_C = 2`** de `hoppe_sur_espace` et
-  `f_sans_point_base` (§5.36) — qui a rendu son verdict : **`#7745` a trois
-  générations et n'est pas stable**, h⁰(∧²V) valant 1 sur le sous-espace
-  équivariant contre 0 sur l'espace entier.
-
-Et un défaut trouvé en chemin, plus profond que les trois : un fichier de
-résultats ne portait pas la version du code qui l'avait écrit, donc les
-reprises reconduisaient en silence des verdicts d'un programme corrigé depuis
-— **4 049 candidats écartés à tort**. Recalcul complet, marquage de version, et
-mesure des deux côtés : **aucun verdict retourné, 34 733 SURVIT inchangés**.
+- les **27 couples du §5.34** — en réalité **48 couples et 5 039 réalisations**
+  (§5.35) ; et les **trous de couverture**, fermés par le même run ;
+- un défaut plus profond : un fichier de résultats ne portait pas la version du
+  code qui l'avait écrit, donc les reprises reconduisaient des verdicts d'un
+  programme corrigé depuis — **4 049 candidats écartés à tort**. Recalcul
+  complet, marquage de version, mesure des deux côtés : **aucun verdict
+  retourné, 34 733 SURVIT inchangés** (§5.35) ;
+- la **généralisation à `rank_C = 2`** : `#7745` a trois générations et **n'est
+  pas stable** (§5.36) ;
+- le **décompte par strate** : les 691 survivants sortaient d'une strate sur
+  trois, les deux autres n'ayant aucun verdict. 1 000 candidats étaient bloqués
+  par une garde — **68 survivent** — et 472 n'étaient pas des fibrés du tout,
+  `f` y ayant un **lieu de base démontré, témoin vérifié, 944 sur 944**
+  (§5.37).
 
 **La discipline qui a trouvé tous les défauts** est au §8 — en particulier la
 *règle des filtres*. Le §5.34 en donne la forme la plus dure (le contrôle et
 l'objet contrôlé partagent le défaut) ; le §5.35 celle où le contrôle crie
-juste mais désigne le mauvais coupable ; le §5.36 celle, plus banale et tout
-aussi coûteuse, d'un booléen qui confond « une charge sur 27 » et « vingt-sept
-sur 27 ».
+juste et désigne le mauvais coupable ; le §5.36 le booléen qui confond une
+charge sur 36 et trente-six ; le §5.37 le mot `indetermine`, qui recouvrait
+trois situations demandant trois actions opposées.
 
 ---
 
@@ -227,7 +232,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        46 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        47 tests — À LANCER AVANT CHAQUE SCAN
 ├── resume_cible.py            dépouillement d'un scan ciblé
 ├── diagnostic_par.py          diagnostic du parallélisme (coût, Pool, contexte)
 ├── validate_cohomology.py     harnais de validation du socle
@@ -2700,6 +2705,159 @@ dans un cas sur trois.
 
 ---
 
+### 5.37 « Indéterminé » cachait trois choses différentes
+
+Après le §5.36, `scan_wilson5` comptait 34 733 SURVIT. Le décompte par strate
+dit d'où ils sortent — en candidats distincts, représentants d'orbite seuls :
+
+| rank_C | rang_V | candidats | indéterminés | survivants |
+|---|---|---|---|---|
+| 1 | 3 | 472 | **472** | 0 |
+| 1 | 4 | 968 | 0 | **691** |
+| 2 | 3 | 1 131 | **1 000** | 0 |
+
+**Les 691 survivants viennent tous d'une strate sur trois**, et les deux autres
+n'ont aucun verdict. Or « indéterminé » y recouvre trois situations que rien ne
+distinguait dans le fichier : un test jamais lancé, un test lancé et non
+concluant, et un objet qui n'est pas un fibré. Les trois se lisaient de la même
+façon.
+
+#### Ce que ça coûte de trancher : rien
+
+`echantillon_rank_c2.py` mesure au lieu d'estimer, sur les 2 440 candidats :
+**1 599 s à 7 cœurs**, soit 0,83 à 2,65 s par λ selon la strate, rapport
+rank_C=2 / rank_C=1 de **1,36**. Le montage de l'anneau covariant, que
+j'annonçais comme le poste dominant, coûte **au plus 0,3 s** : cette annonce
+généralisait un blocage observé dans un VM à deux cœurs, pas une mesure. Le
+premier chiffre de ce paragraphe a été obtenu en une demi-heure là où le §5.35
+avait extrapolé trente heures à partir d'une moyenne prise sur les cas légers.
+
+#### Le catalogue n'était pas vide à rank_C = 2
+
+Les 1 000 candidats bloqués par les gardes levées au §5.36 rendent maintenant
+un verdict :
+
+```
+Hoppe :  False 1904   True 102        surjectivite certifiee : 68
+valeurs dominantes : {1:0, 2:1} x1865   {1:0, 2:0} x102   {1:1} x34
+```
+
+**34 candidats, 68 lignes λ, sur 25 CICYs distinctes** passent le critère de
+Hoppe complet *et* voient leur surjectivité certifiée. Le fichier en comptait
+**zéro** sur 212 819 lignes. Ce n'était pas un résultat d'absence : c'était
+`len(c) == 1`.
+
+Et l'élimination de `#7745` (§5.36) n'était pas un cas isolé : la signature
+`{1:0, 2:1}` revient **1 865 fois sur 2 006**. C'est le régime normal de la
+strate, pas une particularité du candidat ℤ₄.
+
+#### Les 472 ne sont pas indéterminés : ce ne sont pas des fibrés
+
+944 lignes sur 944 passent Hoppe — et **aucune** ne voit sa surjectivité
+certifiée. Deux vérifications avant d'interpréter :
+
+- le test de Hoppe n'est pas **vide** : sources 10 à q = 1 et 33 à q = 2, rangs
+  réellement calculés. Le `h⁰(∧²V) = 0` est un résultat ;
+- l'échec de la surjectivité n'est pas **arithmétique** : 16 degrés essayés,
+  0 « source insuffisante », 16 rangs calculés, écart cible − rang de 4, 4,
+  2… Ce n'est donc pas le motif du §5.4.
+
+Reste que `f_sans_point_base` est un critère SUFFISANT : son échec ne démontre
+rien. Il fallait décider autrement, et la strate le permet — elle est **une
+seule configuration répétée**. Les 472 se rangent en trois formes, identiques à
+permutation près des facteurs :
+
+```
+b = 3 x O(e_k) + O(e_i + e_j)     c = O(3e_k + e_i + e_j)
+trois facteurs porteurs, TOUS des P^1, et l'ideal est INERTE
+```
+
+Vérifié charge par charge et degré par degré : `dim(S/I)_d = dim S_d` partout.
+Les CICYs hébergeantes — un P³ ici, un P⁷ là — sont à degré 0 sur tous les
+monômes en jeu et **ne participent pas au calcul**. C'est pourquoi huit CICYs
+différentes rendaient des nombres rigoureusement identiques : ce n'était pas
+une constante déguisée en résultat (§5.19), c'était le même problème posé huit
+fois.
+
+Le problème vit donc sur P¹×P¹×P¹, et s'y résout exactement. Avec `z` la
+coordonnée du facteur triple :
+
+```
+f_4 est de degre (0,0,3) : un cubique binaire en z, donc 3 racines
+f_1, f_2, f_3 sont de degre (1,1,2)
+```
+
+Un zéro commun exige `f_4 = 0`. En chaque racine, les trois autres se
+restreignent en formes (1,1) sur P¹×P¹, c'est-à-dire des matrices 2×2, et
+elles ont un zéro commun si et seulement si les trois vecteurs `xᵀMᵢ` sont
+proportionnels — un rang **mod p**, pas un rang réel.
+
+**Mesure : 944 sur 944, témoin vérifié.** Le point est exhibé, puis les quatre
+`fᵢ` y sont **recalculées** et valent zéro. Un témoin affirmé sans substitution
+n'est pas un témoin.
+
+Le mécanisme se voit : à la racine du cubique, l'équivariance force les trois
+formes à sortir **diagonales**,
+
+```
+f_0 -> [[20691, 0], [0, 25796]]      f_1 -> [[2583, 0], [0, 13927]]
+f_2 -> [[19623, 0], [0, 20825]]
+```
+
+et trois formes `a·x₀y₀ + d·x₁y₁` s'annulent toutes en `x=(1,0), y=(0,1)`,
+quels que soient `a` et `d`. Le lieu de base est **imposé par la structure ℤ₂**,
+pas par un accident de coefficients.
+
+Donc `f` n'est pas surjective, `V = ker f` n'est pas un fibré, et ces 472 ne
+sont pas des candidats. Le certificat avait raison d'échouer 944 fois : il n'y
+avait rien à certifier.
+
+**La réserve mod p, opposée comme au §5.36.** Un point de base trouvé mod p le
+démontre mod p, et la réserve joue contre une élimination. Mesure : trois
+premiers × deux tirages de l'idéal covariant × quatre CICYs, **24 sur 24**.
+
+#### Le 47ᵉ test
+
+`t_lieu_de_base_rv3` fige **deux verdicts opposés, même candidat, même
+fonction** : `f` tiré dans le sous-espace équivariant donne un lieu de base
+vérifié ; `f` tiré dans l'espace entier n'en donne aucun. Un détecteur qui
+crierait toujours échoue le second volet, un détecteur muet échoue le premier.
+Le test exige en outre que le sous-espace équivariant soit **propre** — sinon
+les deux volets porteraient sur le même espace et ne mordraient pas — et que
+les quatre `fᵢ` s'annulent au point exhibé.
+
+#### Où en est le catalogue
+
+| strate | avant | après |
+|---|---|---|
+| rank_C=1, rV=3 — 944 λ | indéterminés | **éliminés** : pas des fibrés |
+| rank_C=1, rV=4 — 2 506 λ | 712 survivants | inchangé |
+| rank_C=2, rV=3 — 2 006 λ | *aucun verdict* | 1 904 éliminés, **68 survivants**, 34 en attente |
+
+Le reliquat indéterminé passe de **1 472 candidats à 34 lignes λ** : celles qui
+passent Hoppe à rank_C = 2 sans certificat de surjectivité. La même question
+s'y pose — lieu de base réel ou certificat trop court — et demandera
+l'équivalent de `lieu_de_base_rv3.py` pour rank_C = 2, où le lieu de base est
+celui des **mineurs 2×2** et non des `fᵢ`.
+
+**Ces verdicts ne sont pas dans `scan_wilson5`.** Ils vivent dans
+`tous_indetermines.jsonl` et `lieu_de_base_rv3.jsonl`. Les porter dans le
+fichier de référence demande un balayage, donc une décision — et le marquage de
+version du §5.35 signalera alors, correctement, que le fichier mélange deux
+états du code.
+
+#### Ce que ça ajoute au §8
+
+| | ce qui devenait invisible | ce que le silence faisait croire |
+|---|---|---|
+| **§5.37** | **`indetermine` confond « pas calculé », « calculé sans conclure » et « l'objet n'est pas un fibré »** | 1 472 candidats en attente, dont 472 qui n'auraient jamais dû être dans la liste et 1 000 que rien n'empêchait de décider |
+
+Un verdict négatif et une absence de verdict ne se distinguent pas quand on
+écrit le même mot pour les deux. Ici, les trois cas demandaient trois actions
+opposées : lever une garde, exhiber un témoin, ne rien faire.
+
+---
+
 ## 6. Ce qui reste faux ou absent
 
 | | état |
@@ -2767,7 +2925,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 46 tests, ~5 min. À lancer après chaque modification,
+**`tests_regression.py` — 47 tests, ~5 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -2799,6 +2957,7 @@ Huit ajouts de la session « équivariance » :
 | verdicts contradictoires | « hors domaine » et « ok » sur la même identité, sans aucun recalcul | oui, **deux verdicts opposés** : le fichier sale doit être vu, le propre doit passer |
 | classification de σ | **#6947** porte les deux réponses : ℤ₂ fixe les facteurs, ℤ₄ les permute | oui : aucune classification constante ne passe les deux volets |
 | rank_C = 2, valeurs connues d'avance | `V = O³` explicite : h⁰(∧^p V) = 3, 3, 1, et le mineur (0,1) certifie | oui, **deux verdicts opposés** : un f de rang 1 donne 4 et voit ses mineurs refusés — et l'ancienne cible à une composante donnait 4 au lieu de 3 |
+| lieu de base sur P¹×P¹×P¹ | le témoin est **resubstitué** : les quatre f_i doivent s'annuler au point exhibé | oui, **deux verdicts opposés** : équivariant → lieu de base, générique → aucun ; plus l'exigence que le sous-espace équivariant soit propre |
 
 Trois d'entre eux figent **deux verdicts opposés**, et trois confrontent le code à
 une valeur connue d'avance : 125 pour la quintique, 1 pour det V = O, 3 + 3 pour
@@ -2848,6 +3007,7 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | §5.35 | le **contrôle d'orbite ne compare qu'à l'intérieur d'une session** ; `if a and a != b_` sur une liste vide | un repli « vérifié » par des comparaisons qui n'ont jamais eu lieu |
 | **§5.35** | **un fichier de résultats ne porte pas la version du code qui l'a écrit** | un fichier homogène, là où trois versions cohabitaient — 4 049 candidats écartés à tort |
 | **§5.36** | **« hors domaine » rendu comme un booléen** | 1 charge sur 36 et 36 sur 36 lues comme la même chose — et le verrou des ℤ₄ cherché du côté du rang de C |
+| **§5.37** | **`indetermine` confond « pas calculé », « calculé sans conclure » et « l'objet n'est pas un fibré »** | 1 472 candidats en attente, dont 472 qui n'auraient jamais dû figurer dans la liste et 1 000 que rien n'empêchait de décider |
 
 La dernière est d'une espèce à part : rien n'y devient vide. Le contrôle interne
 et l'objet contrôlé partagent le défaut, donc le contrôle le confirme. Un filtre
@@ -2915,6 +3075,14 @@ python -u comparer_scans.py scan_wilson4 scan_wilson5 --sortie comparaison.json
 #   calcule quand meme, en estampillant chaque ligne d'une reserve.
 python -u verdict_z4.py cicyquotients.m cicylist.txt
 python -u verdict_z4.py cicyquotients.m cicylist.txt --forcer
+
+# cout et verdicts des strates sans verdict (§5.37) -- ecriture incrementale,
+#   Ctrl-C sans perte, --resume reprend le reste
+python -u echantillon_rank_c2.py cicyquotients.m cicylist.txt -j 7 --par-strate 1200
+
+# lieu de base, EXACT, sur la strate rank_C = 1 / rang_V = 3
+#   exhibe un point et l'y resubstitue ; ne conclut pas s'il n'a pas de racine
+python -u lieu_de_base_rv3.py cicyquotients.m cicylist.txt -n 472
 
 # classer sigma realisation par realisation, et designer les lots a refaire
 #   s'arrete si ses ancres ou l'empreinte du checkpoint ne tombent pas juste

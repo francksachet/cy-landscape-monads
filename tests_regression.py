@@ -24,6 +24,29 @@ Sortie : une ligne par test, et un code de retour non nul si l'un echoue.
 """
 import sys, os, itertools, random, traceback
 
+
+def _sortie_tolerante():
+    """
+    Empeche un plantage d'encodage sur une console Windows.
+
+    Un intitule de test contenant un caractere hors cp1252 ('∩') a fait lever
+    UnicodeEncodeError a la BOUCLE D'AFFICHAGE -- donc APRES que les 46 tests
+    ont tourne, et le rapport entier a ete perdu pour un caractere. Le meme
+    defaut avait deja ete traite dans equivariance_f.py, et ne l'avait pas ete
+    ici : une suite de non-regression qui ne survit pas a son propre rapport ne
+    protege rien.
+
+    errors='replace' -- le caractere devient '?', le rapport sort.
+    """
+    for flux in (sys.stdout, sys.stderr):
+        try:
+            flux.reconfigure(errors='replace')
+        except (AttributeError, ValueError):
+            pass
+
+
+_sortie_tolerante()
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
@@ -3456,9 +3479,12 @@ def t_lieu_de_base_rv3():
         ("le sous-espace equivariant n'est pas propre : les deux volets "
          "porteraient sur le meme espace et le test ne mordrait pas")
 
-    r = analyser(A, amb, b, c, s['base'], out['offsets'], out['dims'],
+    r = analyser(A, amb, cfg, b, c, s['base'], out['offsets'], out['dims'],
                  out['degres'], p, np.random.RandomState(7))
     assert r.get('etat') == 'ok', r.get('etat')
+    assert r.get('F_Y', 0) > 0, \
+        ("le temoin est rendu sans que F ∩ Y soit demontree non vide : il ne "
+         "temoigne alors de rien, le point de base pouvant etre hors de Y")
     assert r['lieu_de_base'], \
         ("aucun lieu de base sur le sous-espace equivariant -- or c'est la "
          "raison pour laquelle 944 lignes sur 944 ne se certifient jamais")
@@ -3467,7 +3493,7 @@ def t_lieu_de_base_rv3():
         f"les f_i ne s'annulent pas au point exhibe : {r['verification']}"
 
     plein = np.eye(out['dim_totale'], dtype=np.int64)
-    g = analyser(A, amb, b, c, plein, out['offsets'], out['dims'],
+    g = analyser(A, amb, cfg, b, c, plein, out['offsets'], out['dims'],
                  out['degres'], p, np.random.RandomState(11))
     assert g.get('etat') == 'ok', g.get('etat')
     assert not g['lieu_de_base'], \
@@ -3476,6 +3502,230 @@ def t_lieu_de_base_rv3():
 
     return (f"#{NUM} : equivariant -> lieu de base en z={r['z']} x={r['x']} "
             f"y={r['y']}, quatre f_i nulles ; generique -> aucun")
+
+
+
+@test("F inter Y : le temoin du lieu de base est sur Y, et la garde sait refuser")
+def t_rencontre_F_Y():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    `lieu_de_base_rv3.py` exhibe un point en fixant les coordonnees des trois
+    facteurs PORTEURS et en donnant aux autres une valeur arbitraire. Les f_i
+    etant de degre 0 sur ces autres facteurs, elles s'annulent non pas en un
+    point mais sur toute la sous-variete F = {p_0} x (facteurs non porteurs).
+    Or un point de base doit etre SUR Y. Le §5.37 a conclu 944 fois sans avoir
+    pose cette question -- et sans elle, la substitution elle-meme n'est pas
+    bien definie : un representant d'un element de S/I n'a de valeur
+    intrinseque qu'en un point de Y.
+
+    Le critere est SUFFISANT et dans le bon sens : si le lieu des zeros des K
+    equations restreintes est vide dans F, la section de la somme des L_i ne
+    s'annule nulle part, donc sa classe d'Euler prod c_1(L_i) est nulle. Un
+    nombre d'intersection STRICTEMENT POSITIF demontre donc la rencontre ; un
+    nombre nul ne demontre rien, et doit laisser le candidat indetermine.
+
+    LES DEUX COTES
+    --------------
+    - geometrie connue sans calcul : dans P^1 x P^1, deux diviseurs (1,0) sont
+      deux fibres DISJOINTES -- le nombre doit valoir 0 ; un (1,0) et un (0,1)
+      se coupent en un point -- il doit valoir 1. Un compteur qui rendrait
+      toujours du positif echoue le premier, un compteur muet le second ;
+    - sur le vrai chemin de code : #4078 rend un temoin avec F.Y = 2, et le
+      MEME appel sur une config dont les colonnes libres ont ete annulees --
+      donc ou rien ne prouve la rencontre -- doit REFUSER de rendre un temoin.
+      Sans ce second volet, la garde pourrait etre un `return True` deguise.
+    """
+    import os
+    import numpy as np
+    ici = os.path.dirname(os.path.abspath(__file__))
+    CICYLIST = os.path.join(ici, 'cicylist.txt')
+    BRAUN_M = os.path.join(ici, 'cicyquotients.m')
+    for f in (BRAUN_M, CICYLIST):
+        if not os.path.exists(f):
+            return f"{os.path.basename(f)} absent - test ignore"
+    from rencontre_F_Y import nombre_intersection, rencontre
+    from lieu_de_base_rv3 import analyser
+    from cy_landscape.data.parse_oxford import load_oxford_file
+    from wilson_match import parse_braun, parse_cicylist, apparier
+    from cy_landscape.core.braun_symmetry import (parse_symmetries, ordres_rt,
+                                                  matrice_mod_p)
+    from cy_landscape.core.gamma_action import choisir_premier, racine_primitive
+    from cy_landscape.core.covariant_ring import (resoudre_covariants,
+                                                  tirer_covariants,
+                                                  CovariantRing)
+    from cy_landscape.core.equivariant_monad import espace_f_equivariant
+
+    assert nombre_intersection([1, 1], [[1, 0], [1, 0]]) == 0, \
+        "deux fibres disjointes de P^1 x P^1 se voient attribuer un point"
+    assert nombre_intersection([1, 1], [[1, 0], [0, 1]]) == 1, \
+        "un (1,0) et un (0,1) ne se coupent pas : le compteur est muet"
+    assert nombre_intersection([1], [[1], [1], [1]]) is None, \
+        "plus d'equations que de dimensions : le critere doit se declarer hors portee"
+
+    NUM = 4078
+    E = {x['num']: x for x in load_oxford_file(CICYLIST)}
+    e = E[NUM]
+    amb, cfg = e['ambient'], np.asarray(e['config'])
+    b = [[0, 0, 1, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 1, 0, 0, 0],
+         [1, 1, 0, 0, 0, 0]]
+    c = [[1, 1, 3, 0, 0, 0]]
+
+    r = rencontre(amb, cfg, [0, 1, 2])
+    assert r['dim_F'] == r['K'], \
+        f"dim F = {r['dim_F']} et K = {r['K']} : le nombre ne serait pas la classe d'Euler"
+    assert r['nombre'] == 2, f"F.Y = {r['nombre']} au lieu de 2 pour #{NUM}"
+    assert not r['equations_inertes'], \
+        ("une equation de Y est de degre 0 sur F : elle y vaut une constante, "
+         "que le nombre d'intersection ne voit pas")
+
+    SYM = parse_symmetries(BRAUN_M)
+    corr, _, _ = apparier(parse_braun(BRAUN_M), parse_cicylist(CICYLIST))
+    inv = {v: k for k, v in corr.items()}
+    sym = [x for x in SYM[inv[NUM]]['symetries'] if x['nom'] == 'Z2'][0]
+    ordres = sorted(ordres_rt(sym['coord']) | ordres_rt(sym['poly']) | {2})
+    p, _ = choisir_premier(ordres, minimum=30011)
+    rac = {k: racine_primitive(p, k) for k in ordres}
+    Mc = [matrice_mod_p(x, p, rac) for x in sym['coord']]
+    Np = [matrice_mod_p(x, p, rac) for x in sym['poly']]
+    res = resoudre_covariants(amb, cfg, Mc, Np, p)
+    co = tirer_covariants(res['par_convention']['N']['base'], res['offsets'],
+                          res['dims'], p, np.random.RandomState(0))
+    A = CovariantRing(amb, cfg, co, p)
+    out = espace_f_equivariant(A, amb, b, c, Mc, p)
+    s = out['solutions'][0]
+
+    bon = analyser(A, amb, cfg, b, c, s['base'], out['offsets'], out['dims'],
+                   out['degres'], p, np.random.RandomState(7))
+    assert bon.get('etat') == 'ok' and bon.get('lieu_de_base'), bon.get('etat')
+    assert bon['F_Y'] == 2, bon['F_Y']
+
+    # meme candidat, meme f : seules les colonnes LIBRES de la config sont
+    # annulees. Y n'est plus contrainte le long de F, plus rien ne prouve la
+    # rencontre, et la garde doit refuser le temoin qu'elle vient de rendre.
+    creux = np.array(cfg, dtype=np.int64).copy()
+    creux[:, 3:] = 0
+    refus = analyser(A, amb, creux, b, c, s['base'], out['offsets'],
+                     out['dims'], out['degres'], p, np.random.RandomState(7))
+    assert refus.get('etat') != 'ok', \
+        ("la garde rend un verdict alors que rien ne demontre F ∩ Y : elle "
+         "ne refuse jamais, donc elle ne filtre rien")
+    assert refus.get('lieu_de_base') is None, refus
+
+    return (f"#{NUM} : F.Y = 2 (dim F = K = {r['K']}), temoin sur Y ; "
+            f"config creusee -> « {refus['etat']} »")
+
+
+
+@test("lieu de base a rank_C = 2 : l'equivariance fait CHUTER le rang, et c'est ce qui met F sur Y")
+def t_lieu_de_base_rc2():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    Les 34 dernieres lignes lambda indeterminees passent Hoppe a rank_C = 2
+    sans certificat de surjectivite. Le lieu de base y est celui des mineurs
+    2x2, sur des porteurs P^1 x P^n -- et le raisonnement du §5.37 n'y
+    transpose PAS, pour une raison de dimension.
+
+    Le cubique binaire det[[L_0,L_1],[Q_0,Q_1]] a toujours des racines, et en
+    une racine la condition de rang <= 1 devient TROIS formes lineaires sur
+    P^n, qui ont toujours un zero. Le lieu de base est donc non vide dans
+    P^1 x P^n pour f equivariante COMME pour f generique : son existence ne
+    discrimine rien. Ce qui discrimine est sa DIMENSION :
+
+        dim F = dim Lambda + somme(libres) = (n - rang) + somme(libres)
+        K     = codim Y    = 1 + n + somme(libres) - 3
+
+    Trois formes independantes donnent dim F = K - 1, une de MOINS que la
+    codimension de Y : le critere d'Euler ne s'applique pas et rien ne se
+    conclut. Il faut que le rang CHUTE. C'est ce que ce test fige.
+
+    LES DEUX COTES
+    --------------
+    Meme candidat, meme fonction, meme anneau :
+    - f EQUIVARIANT  -> rang 2, dim F = K, F.Y > 0, temoin de rang <= 1 verifie
+      sur les DIX mineurs ;
+    - f GENERIQUE    -> rang 3, dim F = K - 1, et le critere se declare hors
+      portee au lieu de conclure.
+    Un detecteur qui eliminerait toujours echoue le second volet ; un detecteur
+    muet echoue le premier. Et si le volet generique devait un jour rendre
+    rang 2 lui aussi, la chute ne serait plus imputable a l'equivariance.
+    """
+    import os
+    import numpy as np
+    ici = os.path.dirname(os.path.abspath(__file__))
+    CICYLIST = os.path.join(ici, 'cicylist.txt')
+    BRAUN_M = os.path.join(ici, 'cicyquotients.m')
+    for f in (BRAUN_M, CICYLIST):
+        if not os.path.exists(f):
+            return f"{os.path.basename(f)} absent - test ignore"
+    from lieu_de_base_rc2 import analyser_rc2
+    from cy_landscape.core.braun_symmetry import (parse_symmetries, ordres_rt,
+                                                  matrice_mod_p)
+    from cy_landscape.core.gamma_action import choisir_premier, racine_primitive
+    from cy_landscape.core.covariant_ring import (resoudre_covariants,
+                                                  tirer_covariants,
+                                                  CovariantRing)
+    from cy_landscape.core.equivariant_monad import espace_f_equivariant
+    from cy_landscape.data.parse_oxford import load_oxford_file
+    from wilson_match import parse_braun, parse_cicylist, apparier
+
+    NUM = 2660
+    b = [[0, 0, 0, 1, 0, 0], [0, 0, 0, 1, 0, 0], [0, 0, 0, 1, 0, 0],
+         [0, 0, 0, 0, 0, 1], [0, 0, 0, 0, 0, 1]]
+    c = [[0, 0, 0, 1, 0, 1], [0, 0, 0, 2, 0, 1]]
+    E = {x['num']: x for x in load_oxford_file(CICYLIST)}
+    e = E[NUM]
+    amb, cfg = e['ambient'], np.asarray(e['config'])
+    SYM = parse_symmetries(BRAUN_M)
+    corr, _, _ = apparier(parse_braun(BRAUN_M), parse_cicylist(CICYLIST))
+    inv = {v: k for k, v in corr.items()}
+    sym = [x for x in SYM[inv[NUM]]['symetries'] if x['nom'] == 'Z2'][0]
+    ordres = sorted(ordres_rt(sym['coord']) | ordres_rt(sym['poly']) | {2})
+    p, _ = choisir_premier(ordres, minimum=30011)
+    rac = {k: racine_primitive(p, k) for k in ordres}
+    Mc = [matrice_mod_p(x, p, rac) for x in sym['coord']]
+    Np = [matrice_mod_p(x, p, rac) for x in sym['poly']]
+    res = resoudre_covariants(amb, cfg, Mc, Np, p)
+    co = tirer_covariants(res['par_convention']['N']['base'], res['offsets'],
+                          res['dims'], p, np.random.RandomState(0))
+    A = CovariantRing(amb, cfg, co, p)
+    out = espace_f_equivariant(A, amb, b, c, Mc, p)
+    assert out['etat'] == 'ok' and out['solutions'], out['etat']
+    s = out['solutions'][0]
+    assert s['dim'] < out['dim_totale'], \
+        "le sous-espace equivariant n'est pas propre : les deux volets ne mordraient pas"
+
+    r = analyser_rc2(A, amb, cfg, b, c, s['base'], out['offsets'], out['dims'],
+                     out['degres'], p, np.random.RandomState(7))
+    assert r.get('etat') == 'ok', r.get('etat')
+    assert r['rang_formes'] == 2, \
+        f"rang {r['rang_formes']} : l'equivariance ne fait plus chuter le rang"
+    assert r['dim_F'] == r['K'], \
+        f"dim F = {r['dim_F']} et K = {r['K']} : le nombre n'est plus la classe d'Euler"
+    assert r['F_Y'] > 0, \
+        "F.Y nul : rien ne demontre que le point de base est sur Y"
+    assert r['temoin_rang_1'] and not any(r['mineurs'].values()), \
+        f"les dix mineurs 2x2 ne s'annulent pas au point exhibe : {r['mineurs']}"
+
+    plein = np.eye(out['dim_totale'], dtype=np.int64)
+    g = None
+    for graine in (11, 13, 17, 19, 23):
+        g = analyser_rc2(A, amb, cfg, b, c, plein, out['offsets'], out['dims'],
+                         out['degres'], p, np.random.RandomState(graine))
+        if g.get('etat') == 'ok':
+            break
+    assert g.get('etat') == 'ok', \
+        f"le volet generique est muet ({g.get('etat')}) : il ne controle rien"
+    assert g['rang_formes'] == 3, \
+        ("le f GENERIQUE voit lui aussi le rang chuter : la chute n'est alors "
+         "pas imputable a l'equivariance")
+    assert g['F_Y'] is None, \
+        ("le critere conclut sur un f generique alors que dim F < K : il "
+         "elimine tout, et le premier volet ne demontrait rien")
+
+    return (f"#{NUM} : equivariant rang 2, dim F = K = {r['K']}, F.Y = "
+            f"{r['F_Y']}, 10 mineurs nuls ; generique rang 3, hors portee")
 
 
 # ======================================================================

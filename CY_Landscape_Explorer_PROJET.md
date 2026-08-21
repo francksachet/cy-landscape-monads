@@ -6,34 +6,40 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 47 tests.
+> non une propriété des candidats, et la suite compte 46 tests.
 
 ---
 
 ## 0. Où reprendre — point d'entrée
 
-**État au 21 août 2026.** Dépôt à `d67e9ed` (§5.37), **47 tests verts**,
-`python tests_regression.py` avant toute chose. Environnement : Windows,
+**État au 21 août 2026.** Dépôt à `d67e9ed` **plus les travaux des §5.38 et de
+la garde `F ∩ Y`, non encore commités**. `python tests_regression.py` avant
+toute chose : **46 tests**, dont deux ajoutés depuis `d67e9ed` et qui n'ont
+encore été passés qu'**isolément** — la suite complète n'a pas été relancée
+jusqu'au bout. C'est la première chose à faire. Environnement : Windows,
 PowerShell (`;` et non `&&`, `Tee-Object`, `python -u`).
 
+**Le catalogue n'a plus de reliquat indéterminé.** Toute ligne λ porte un
+verdict : survivante, éliminée par Hoppe, ou éliminée parce que `V = ker f`
+n'est pas un fibré (§5.37, §5.38).
+
 **Le balayage qui fait foi est `scan_wilson5`** — 5 636 lots sur 5 636, une
-seule version du code, zéro identité contradictoire, zéro discordance
-d'orbite, couverture complète (§5.35). **Mais il n'est plus à jour** : les
-verdicts des §5.36 et §5.37 vivent dans `tous_indetermines.jsonl` et
-`lieu_de_base_rv3.jsonl`, pas dans le fichier de référence.
+seule version du code, zéro identité contradictoire, zéro discordance d'orbite,
+couverture complète (§5.35). **Mais il n'est plus à jour**, et c'est maintenant
+le seul écart entre le catalogue et son fichier de référence.
 
 **Le travail suivant, dans l'ordre :**
 
-1. **Porter les verdicts des §5.36 et §5.37 dans `scan_wilson5`.** 68 lignes λ
-   survivantes à rank_C = 2 (34 candidats, 25 CICYs) que le fichier compte
-   encore comme indéterminées, et 944 lignes à éliminer parce que `f` y a un
-   lieu de base démontré. C'est un balayage, donc une décision de coût — et le
-   marquage de version signalera, correctement, un fichier à deux états du
-   code.
-2. **Le lieu de base à `rank_C = 2`**, pour les 34 lignes λ qui passent Hoppe
-   sans certificat de surjectivité — le dernier reliquat indéterminé du
-   catalogue. Le lieu de base y est celui des **mineurs 2×2**, pas des `fᵢ` :
-   `lieu_de_base_rv3.py` en donne la forme, pas le contenu.
+1. **Relancer `tests_regression.py` en entier**, puis relancer
+   `lieu_de_base_rv3.py` sur les 472 : la garde `F ∩ Y` est nouvelle, et le
+   fichier `lieu_de_base_rv3.jsonl` actuel a été écrit sans elle — il ne porte
+   donc pas le champ qui justifie ses 944 verdicts. Environ 12 min. **Ne pas le
+   corriger à la main : ce serait la maladie du §5.35.**
+2. **Porter les verdicts des §5.36 à §5.38 dans `scan_wilson5`.** 68 lignes λ
+   survivantes à rank_C = 2 que le fichier compte encore comme indéterminées,
+   944 + 34 lignes à éliminer parce que `f` y a un lieu de base démontré **sur
+   Y**. C'est un balayage, donc une décision de coût — et le marquage de
+   version signalera, correctement, un fichier à deux états du code.
 3. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
    §5.32). C'est ce qui décide de `#6947` : sa charge `c₁ + b₄` donne
    `dim(S/I) = 84` contre `χ = 76`, rien de certifié, et les 8 unités
@@ -56,17 +62,26 @@ dont une charge a `dim(S/I) ≠ h⁰`.
 - la **généralisation à `rank_C = 2`** : `#7745` a trois générations et **n'est
   pas stable** (§5.36) ;
 - le **décompte par strate** : les 691 survivants sortaient d'une strate sur
-  trois, les deux autres n'ayant aucun verdict. 1 000 candidats étaient bloqués
-  par une garde — **68 survivent** — et 472 n'étaient pas des fibrés du tout,
-  `f` y ayant un **lieu de base démontré, témoin vérifié, 944 sur 944**
-  (§5.37).
+  trois. 1 000 candidats étaient bloqués par une garde — **68 survivent** — et
+  472 n'étaient pas des fibrés, `f` y ayant un **lieu de base démontré, témoin
+  vérifié, 944 sur 944** (§5.37) ;
+- **le témoin des 472 n'était pas sur Y**, et rien ne le demandait : le trou a
+  été trouvé après le commit, et comblé par un nombre d'intersection —
+  **472 sur 472, `F·Y = 2`**, désormais garde obligatoire (§5.37) ;
+- **les 34 dernières lignes λ**, à `rank_C = 2` : l'argument du §5.37 y garde sa
+  forme et perd son issue, car le lieu de base y est non vide pour **tout** `f`.
+  Ce qui tranche est la chute du rang sous équivariance — **34 sur 34, rang 2
+  contre 3 en générique, dix mineurs nuls, `F·Y = 4`** (§5.38).
 
 **La discipline qui a trouvé tous les défauts** est au §8 — en particulier la
 *règle des filtres*. Le §5.34 en donne la forme la plus dure (le contrôle et
-l'objet contrôlé partagent le défaut) ; le §5.35 celle où le contrôle crie
-juste et désigne le mauvais coupable ; le §5.36 le booléen qui confond une
-charge sur 36 et trente-six ; le §5.37 le mot `indetermine`, qui recouvrait
-trois situations demandant trois actions opposées.
+l'objet contrôlé partagent le défaut) ; le §5.35 celle où le contrôle crie juste
+et désigne le mauvais coupable ; le §5.36 le booléen qui confond une charge sur
+36 et trente-six ; le §5.37 le mot `indetermine`, qui recouvrait trois
+situations demandant trois actions opposées — puis, une section plus loin, un
+test à deux volets opposés qui figeait la même question incomplète des deux
+côtés ; le §5.38 un critère qu'on transpose en gardant sa forme et en perdant
+son issue.
 
 ---
 
@@ -232,7 +247,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        47 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        46 tests — À LANCER AVANT CHAQUE SCAN
 ├── resume_cible.py            dépouillement d'un scan ciblé
 ├── diagnostic_par.py          diagnostic du parallélisme (coût, Pool, contexte)
 ├── validate_cohomology.py     harnais de validation du socle
@@ -241,7 +256,11 @@ racine/
 ├── verify_hoppe.py            re-vérification a posteriori de la stabilité
 ├── wilson_match.py            croisement avec la liste de Braun
 ├── equivariance.py            test nécessaire sur les charges
-└── equivariance_f.py          chaîne complète au niveau des polynômes       [+]
+├── equivariance_f.py          chaîne complète au niveau des polynômes       [+]
+├── empreinte_code.py          version du code, écrite dans chaque ligne     [+]
+├── lieu_de_base_rv3.py        lieu de base EXACT, rank_C = 1 / rang_V = 3   [+]
+├── lieu_de_base_rc2.py        lieu de base EXACT, rank_C = 2 (mineurs 2×2)  [+]
+└── rencontre_F_Y.py           le témoin est-il SUR Y ? (garde obligatoire)  [+]
 ```
 
 `[+]` = ajouté lors de la session « équivariance », ou réparé depuis (§5.10,
@@ -2604,7 +2623,7 @@ Deux gardes `len(c) == 1` subsistaient dans `equivariance_f.analyser`. Sans
 les lever, la généralisation n'aurait produit aucun verdict : c'est là que les
 candidats du §2.3 étaient renvoyés `indéterminé`.
 
-#### Le 46ᵉ test : quatre valeurs connues d'avance à rank_C = 2
+#### Le test des quatre valeurs connues d'avance à rank_C = 2
 
 Sur la quintique, toutes charges nulles, `B = O⁵`, `C = O²` et
 `f = [[1,0,0,0,0], [0,1,0,0,0]]` est la projection sur les deux premiers
@@ -2812,11 +2831,63 @@ Donc `f` n'est pas surjective, `V = ker f` n'est pas un fibré, et ces 472 ne
 sont pas des candidats. Le certificat avait raison d'échouer 944 fois : il n'y
 avait rien à certifier.
 
+#### Le témoin n'était pas encore sur Y — et rien ne le demandait
+
+Tout ce qui précède a été écrit, testé et commité (`d67e9ed`) avec un trou. Le
+témoin fixe les coordonnées des **trois facteurs porteurs** et donne aux autres
+une valeur arbitraire — légitimement, puisque les `fᵢ` sont de degré 0 sur ces
+autres facteurs. Mais cette liberté a une conséquence qui n'a jamais été
+énoncée : les `fᵢ` ne s'annulent pas en un point, elles s'annulent sur toute la
+sous-variété
+
+```
+F = {p_0} x (produit des facteurs NON porteurs)
+```
+
+Or un point de base doit être **sur Y**. Tant que `F ∩ Y ≠ ∅` n'est pas
+démontré, le témoin ne témoigne de rien — et la resubstitution, dont ce §5.37
+fait à juste titre son argument, n'est même pas bien définie : un `fᵢ` est un
+élément de `S/I`, et la valeur d'un représentant n'est intrinsèque qu'en un
+point de Y.
+
+`t_lieu_de_base_rv3` ne pouvait pas voir le trou : ses deux volets opposés
+figeaient exactement ce que le script calculait, donc la même question
+incomplète des deux côtés. C'est le motif du §5.34 sous une autre forme — le
+contrôle et l'objet contrôlé partagent le point aveugle.
+
+**Ce qui le comble.** Si le lieu des zéros dans `F` des `K` équations
+restreintes est vide, la section correspondante de `⊕Lᵢ` ne s'annule nulle part
+sur `F`, donc sa classe d'Euler `∏c₁(Lᵢ)` est nulle. Par contraposition, un
+nombre d'intersection **strictement positif** démontre la rencontre. Critère
+suffisant, et dans le bon sens : c'est la rencontre qu'il faut prouver pour
+valider une élimination, et un nombre nul laisse le candidat indéterminé au
+lieu de l'éliminer.
+
+```
+472 sur 472 :  F.Y = 2   et   dim F = K dans TOUS les cas
+               0 equation de Y inerte sur F (une equation de degre 0
+               sur F y vaudrait une constante, que le nombre ne voit pas)
+```
+
+`dim F = K` n'est pas une coïncidence : les trois porteurs étant des P¹,
+`dim A = 3 + Σ libres` et `K = dim A − 3 = Σ libres`, tandis que le lieu de
+base dans P¹×P¹×P¹ est fini. La classe d'Euler tombe donc exactement — la
+complétion par `H^(dim F − K)` que le code prévoit n'a **jamais servi** ici, et
+il vaut mieux le dire que de laisser croire qu'elle a été éprouvée.
+
+Le verdict des 472 tient donc. Il ne tenait pas encore quand il a été écrit.
+`rencontre_F_Y.nombre_intersection` est désormais une **garde obligatoire**
+dans `lieu_de_base_rv3.py` : aucun `lieu_de_base = True` n'est rendu sans ce
+nombre strictement positif. Et le test qui l'accompagne exige que la garde
+sache **refuser** — même candidat, même `f`, mais la config creusée sur ses
+colonnes libres : aucun témoin ne doit alors être rendu. Sans ce second volet,
+la garde pourrait être un `return True` déguisé.
+
 **La réserve mod p, opposée comme au §5.36.** Un point de base trouvé mod p le
 démontre mod p, et la réserve joue contre une élimination. Mesure : trois
 premiers × deux tirages de l'idéal covariant × quatre CICYs, **24 sur 24**.
 
-#### Le 47ᵉ test
+#### Le test du lieu de base
 
 `t_lieu_de_base_rv3` fige **deux verdicts opposés, même candidat, même
 fonction** : `f` tiré dans le sous-espace équivariant donne un lieu de base
@@ -2855,6 +2926,144 @@ version du §5.35 signalera alors, correctement, que le fichier mélange deux
 Un verdict négatif et une absence de verdict ne se distinguent pas quand on
 écrit le même mot pour les deux. Ici, les trois cas demandaient trois actions
 opposées : lever une garde, exhiber un témoin, ne rien faire.
+
+---
+
+### 5.38 Les 34 dernières — la forme de l'argument se transpose, pas son issue
+
+Le §5.37 annonçait qu'il resterait « l'équivalent de `lieu_de_base_rv3.py` pour
+rank_C = 2, où le lieu de base est celui des **mineurs 2×2** et non des `fᵢ` ».
+C'était vrai, et insuffisant. Ce qui change n'est pas l'objet à annuler : c'est
+le **décompte de dimensions**, et c'est lui qui décide.
+
+#### La strate, et la matrice
+
+Les 34 lignes λ tiennent en deux formes, à permutation près des facteurs :
+
+```
+porteurs P^1 x P^n        (n = 3 pour 28 lignes, n = 4 pour 6)
+b = 2 x O(0,1) + 3 x O(1,0)            c = O(1,1) (+) O(2,1)
+```
+
+Avec `x` sur le P¹ et `y` sur le P^n, `f` est 2×5 :
+
+```
+ligne 0 :  L_0(x)  L_1(x)  |  A_2(y)    A_3(y)    A_4(y)
+ligne 1 :  Q_0(x)  Q_1(x)  |  B_2(x,y)  B_3(x,y)  B_4(x,y)
+```
+
+`L` linéaire, `Q` quadratique en `x`, `A` linéaire en `y`, `B` bilinéaire. `f`
+est surjective en un point si et seulement si la matrice y est de **rang 2** ;
+le lieu de base est `{rang ≤ 1}`.
+
+#### L'existence du lieu de base ne discrimine rien
+
+`det[[L₀,L₁],[Q₀,Q₁]]` est un cubique binaire : trois racines. En une racine
+`x*`, les deux premières colonnes deviennent proportionnelles ; si elles ne
+sont pas nulles le rapport μ est déterminé, et `rang ≤ 1` équivaut à **trois
+formes linéaires** `Bⱼ(x*,y) − μ Aⱼ(y) = 0` sur P^n. Trois formes linéaires sur
+P^n avec n ≥ 3 ont toujours un zéro non nul.
+
+Le lieu de base est donc **toujours** non vide dans P¹×P^n — pour `f`
+équivariante comme pour `f` générique. Contrairement au §5.37, son existence
+n'est pas un discriminant : un script qui aurait recopié l'argument précédent
+aurait éliminé la strate entière, et l'aurait fait sans rien démontrer.
+
+#### Ce qui discrimine est la dimension
+
+Le lieu de base dans l'ambiant est `F = {x*} × Λ × (facteurs libres)`, avec
+`dim Λ = n − rang`. Et
+
+```
+dim F = (n - rang) + somme(libres)      K = codim Y = 1 + n + somme(libres) - 3
+```
+
+À rang 3, `dim F = K − 1` : **une dimension de moins** que la codimension de Y.
+Le critère d'Euler ne s'applique pas — et « ne s'applique pas » n'est ni une
+élimination ni une survie. Il faut que le rang **chute**.
+
+C'est l'inverse du §5.37, où trois porteurs P¹ faisaient tomber `dim F = K`
+juste, sur les 472. Même forme d'argument, issue opposée : c'est la raison pour
+laquelle il fallait un second script et non un paramètre du premier.
+
+#### Mesure : le rang chute, et seulement sous équivariance
+
+```
+34 lignes lambda, 25 CICYs, deux formes de porteurs
+  f EQUIVARIANT : rang 2  sur 34/34   dim L = n-2   dim F = K     F.Y = 4
+  f GENERIQUE   : rang 3  sur 34/34   dim L = n-3   dim F = K-1   hors portee
+```
+
+Le mécanisme se lit. Sous équivariance, `L₀` et `L₁` s'annulent **ensemble** à
+la racine du cubique — les 34 cas sont tous dans le régime « ligne 0 nulle sur
+le bloc ». La condition de rang se réduit alors à `A₂ = A₃ = A₄ = 0`, et ces
+trois formes-là sont de rang 2. La chute n'est pas un accident de coefficients :
+elle est imposée par la structure ℤ₂, comme la diagonalité du §5.37.
+
+**Témoin vérifié : les dix mineurs 2×2 recalculés au point exhibé, tous nuls,
+34 fois sur 34.** Et le point est sur Y — `F·Y = 4 > 0`, avec `dim F = K`, donc
+un vrai nombre d'Euler et non une complétion.
+
+**La réserve mod p, opposée comme aux §5.36 et §5.37.** Trouver un lieu de base
+mod p le démontre mod p, et la réserve joue donc contre l'élimination. Mesure :
+quatre candidats × trois premiers × deux tirages de l'idéal covariant, **24 sur
+24**.
+
+**Le volet générique a d'abord été muet sur 6 cas sur 34** — un cubique
+générique n'a pas toujours de racine dans GF(p). Un volet de contrôle muet ne
+contrôle rien, et six silences se seraient lus comme six accords : le script
+insiste maintenant sur plusieurs tirages, et le contraste est complet, 34 sur
+34.
+
+#### Où en est le catalogue
+
+| strate | lignes λ | verdict |
+|---|---|---|
+| rank_C=1, rV=3 | 944 | éliminées — lieu de base sur Y (§5.37) |
+| rank_C=1, rV=4 | 2 506 | **712 survivantes** |
+| rank_C=2, rV=3 | 2 006 | 1 904 éliminées par Hoppe, **68 survivantes**, 34 éliminées ici |
+
+**Le reliquat indéterminé est nul.** Toute ligne λ du catalogue porte
+maintenant un verdict : survivante, éliminée par Hoppe, ou éliminée parce que
+`V = ker f` n'est pas un fibré. Le mot `indetermine` du §5.37 ne recouvre plus
+rien.
+
+**Ces verdicts ne sont toujours pas dans `scan_wilson5`**, et c'est désormais
+le seul travail qui sépare le catalogue de son fichier de référence.
+
+#### Trois choses trouvées en vérifiant l'état de la suite
+
+En vérifiant l'état de la suite, deux nombres de ce document se sont révélés
+faux, et de la même façon : ils avaient été écrits une fois, puis reconduits.
+
+- le document annonçait **47 tests** en quatre endroits ; `tests_regression.py`
+  en exécutait **44**, et en exécute **46** avec les deux ajouts ci-dessus. Les
+  titres « le 46ᵉ test » et « le 47ᵉ test » des §5.36 et §5.37 héritaient de la
+  même dérive : ils ont perdu leur ordinal plutôt que d'être renumérotés, la
+  position n'étant pas ce qu'ils avaient à dire ;
+- le §8 affirmait que **trois** tests figent deux verdicts opposés. Le tableau
+  d'à côté en portait **six**, et en porte **huit** maintenant.
+
+Et un troisième défaut, de la même famille que celui du §9 : le premier
+lancement de la suite complète est **mort à sa boucle d'affichage**. Un `∩` dans
+l'intitulé du nouveau test, une console Windows en cp1252, `UnicodeEncodeError`
+— après que les 46 tests ont tourné. Le rapport entier perdu pour un caractère.
+`equivariance_f.py` portait déjà la parade (`errors='replace'` sur stdout) ;
+`tests_regression.py` ne l'avait pas. Une suite de non-régression qui ne survit
+pas à son propre rapport ne protège rien : la parade y est maintenant, et
+l'intitulé est redevenu encodable.
+
+Aucun des trois ne change un résultat. Mais un document de discipline qui
+annonce un chiffre de contrôle sans le recompter fait exactement ce qu'il
+reproche à ses filtres — et c'est le seul endroit du dépôt où ce chiffre-là est
+vérifiable d'un coup d'œil.
+
+#### Ce que ça ajoute au §8
+
+| | ce qui devenait invisible | ce que le silence faisait croire |
+|---|---|---|
+| **§5.37** | **le témoin fixe les porteurs et laisse `F` libre — `F ∩ Y ≠ ∅` n'a jamais été demandé** | 944 éliminations démontrées, alors que le point de base pouvait être hors de Y, et que la resubstitution qui les valide n'était pas bien définie |
+| **§5.38** | **un critère transposé garde sa forme et perd son issue** | un lieu de base non vide lu comme une élimination — alors qu'il est non vide pour **tout** `f` de la strate, équivariant ou non |
 
 ---
 
@@ -2925,7 +3134,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 47 tests, ~5 min. À lancer après chaque modification,
+**`tests_regression.py` — 46 tests, ~5 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -2958,9 +3167,12 @@ Huit ajouts de la session « équivariance » :
 | classification de σ | **#6947** porte les deux réponses : ℤ₂ fixe les facteurs, ℤ₄ les permute | oui : aucune classification constante ne passe les deux volets |
 | rank_C = 2, valeurs connues d'avance | `V = O³` explicite : h⁰(∧^p V) = 3, 3, 1, et le mineur (0,1) certifie | oui, **deux verdicts opposés** : un f de rang 1 donne 4 et voit ses mineurs refusés — et l'ancienne cible à une composante donnait 4 au lieu de 3 |
 | lieu de base sur P¹×P¹×P¹ | le témoin est **resubstitué** : les quatre f_i doivent s'annuler au point exhibé | oui, **deux verdicts opposés** : équivariant → lieu de base, générique → aucun ; plus l'exigence que le sous-espace équivariant soit propre |
+| `F inter Y` : le témoin est-il sur Y | géométrie connue sans calcul : deux diviseurs (1,0) de P¹×P¹ sont **disjoints**, un (1,0) et un (0,1) se coupent en un point ; puis l'ancre #4078 à F·Y = 2 | oui, **deux verdicts opposés**, dont un sur le vrai chemin de code : la même config, creusée sur ses colonnes libres, doit faire **refuser** le témoin que la garde venait de rendre |
+| lieu de base à rank_C = 2 | l'existence du lieu de base ne discrimine pas — c'est le **rang** des trois formes linéaires qui décide, et il doit chuter de 3 à 2 sous équivariance | oui, **deux verdicts opposés** : équivariant → rang 2, dim F = K, dix mineurs nuls ; générique → rang 3, et le critère doit se déclarer **hors portée** au lieu de conclure |
 
-Trois d'entre eux figent **deux verdicts opposés**, et trois confrontent le code à
-une valeur connue d'avance : 125 pour la quintique, 1 pour det V = O, 3 + 3 pour
+**Huit** d'entre eux figent **deux verdicts opposés** — le chiffre disait
+« trois » depuis plusieurs sections, sans que personne le recompte —, et trois
+confrontent le code à une valeur connue d'avance : 125 pour la quintique, 1 pour det V = O, 3 + 3 pour
 la décomposition du spectre. Un test qui n'exigerait que
 la survie passerait pour un module qui accepte tout ; un test qui n'exigerait que
 l'élimination passerait pour un module qui rejette tout. Les deux ensemble
@@ -3008,6 +3220,8 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | **§5.35** | **un fichier de résultats ne porte pas la version du code qui l'a écrit** | un fichier homogène, là où trois versions cohabitaient — 4 049 candidats écartés à tort |
 | **§5.36** | **« hors domaine » rendu comme un booléen** | 1 charge sur 36 et 36 sur 36 lues comme la même chose — et le verrou des ℤ₄ cherché du côté du rang de C |
 | **§5.37** | **`indetermine` confond « pas calculé », « calculé sans conclure » et « l'objet n'est pas un fibré »** | 1 472 candidats en attente, dont 472 qui n'auraient jamais dû figurer dans la liste et 1 000 que rien n'empêchait de décider |
+| **§5.37** | **le témoin fixe les facteurs porteurs et laisse `F` libre — `F ∩ Y ≠ ∅` n'a jamais été demandé, et le test figeait la même question incomplète des deux côtés** | 944 éliminations « démontrées », alors que le point de base pouvait être hors de Y — et que la resubstitution qui les valide n'était pas bien définie |
+| **§5.38** | **un critère transposé garde sa forme et perd son issue** | un lieu de base non vide lu comme une élimination, alors qu'il est non vide pour **tout** `f` de la strate |
 
 La dernière est d'une espèce à part : rien n'y devient vide. Le contrôle interne
 et l'objet contrôlé partagent le défaut, donc le contrôle le confirme. Un filtre
@@ -3082,7 +3296,19 @@ python -u echantillon_rank_c2.py cicyquotients.m cicylist.txt -j 7 --par-strate 
 
 # lieu de base, EXACT, sur la strate rank_C = 1 / rang_V = 3
 #   exhibe un point et l'y resubstitue ; ne conclut pas s'il n'a pas de racine
+#   GARDE OBLIGATOIRE depuis le §5.37 : aucun temoin rendu sans F.Y > 0
 python -u lieu_de_base_rv3.py cicyquotients.m cicylist.txt -n 472
+
+# le temoin est-il SUR Y ? pure combinatoire, quelques secondes, deux controles
+#   internes (deux (1,0) de P^1xP^1 sont disjoints ; un (1,0) et un (0,1) se
+#   coupent) avant toute mesure
+python -u rencontre_F_Y.py cicylist.txt
+
+# lieu de base a rank_C = 2 : les 34 dernieres lignes lambda (§5.38)
+#   mineurs 2x2 ; ce qui decide est le RANG des trois formes lineaires, pas
+#   l'existence du lieu de base, qui est acquise pour tout f de la strate
+python -u lieu_de_base_rc2.py cicyquotients.m cicylist.txt -n 40
+python -u lieu_de_base_rc2.py cicyquotients.m cicylist.txt --reserve 4
 
 # classer sigma realisation par realisation, et designer les lots a refaire
 #   s'arrete si ses ancres ou l'empreinte du checkpoint ne tombent pas juste

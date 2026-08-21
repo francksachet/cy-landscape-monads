@@ -53,6 +53,20 @@ Les racines de f_4 peuvent vivre dans une extension de GF(p) : le script le
 DIT au lieu de conclure. Un candidat dont le cubique n'a aucune racine dans
 GF(p) est rendu `indetermine`, pas `sans lieu de base`.
 
+LA GARDE F ∩ Y (obligatoire, ajoutee apres coup)
+------------------------------------------------
+Le temoin fixe les coordonnees des trois facteurs PORTEURS et laisse les autres
+libres : les f_i s'annulent donc sur toute la sous-variete F = {p_0} x (facteurs
+non porteurs), et non en un point. Or un point de base doit etre SUR Y. Tant que
+F ∩ Y n'est pas demontree non vide, le temoin ne temoigne de rien -- et la
+substitution elle-meme n'est pas bien definie, les f_i etant des elements de S/I
+dont un representant n'a de valeur intrinseque qu'en un point de Y.
+
+`rencontre_F_Y.nombre_intersection` en fournit la preuve quand elle existe :
+prod_i [d_i] . H^{dim F - K} > 0 dans l'anneau de Chow de F entraine F ∩ Y ≠ vide.
+Aucun verdict `lieu_de_base = True` n'est rendu sans ce nombre strictement
+positif ; un nombre nul rend le candidat `indetermine`, pas `elimine`.
+
 Usage :
     python -u lieu_de_base_rv3.py cicyquotients.m cicylist.txt \
            [--source tous_indetermines.jsonl] [-n 40]
@@ -66,6 +80,8 @@ from collections import Counter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
+
+from rencontre_F_Y import rencontre
 
 
 def _pgcd_poly(a, b, p):
@@ -112,7 +128,7 @@ def _eval_mono(S, coeffs, valeurs, p):
     return tot % p
 
 
-def analyser(anneau, amb, b, c, base, offsets, dims, degres, p, rng):
+def analyser(anneau, amb, cfg, b, c, base, offsets, dims, degres, p, rng):
     """Rend un verdict sur le lieu de base, ou une raison de ne pas conclure."""
     from cy_landscape.core.equivariant_monad import _f_depuis_vecteur
     m = len(amb)
@@ -130,6 +146,17 @@ def analyser(anneau, amb, b, c, base, offsets, dims, degres, p, rng):
         return {'etat': 'forme inattendue (pas de facteur triple)'}
     kz = kz[0]
     kx, ky = [k for k in port if k != kz]
+
+    # --- GARDE : le futur temoin sera-t-il seulement SUR Y ? --------------
+    # Elle est placee AVANT tout calcul : un temoin qu'on ne pourra pas
+    # situer sur Y ne vaut pas la peine d'etre cherche, et surtout ne doit
+    # pas pouvoir etre rendu.
+    rc = rencontre(amb, cfg, port)
+    if rc['nombre'] is None or rc['nombre'] <= 0:
+        return {'etat': 'F ne rencontre pas Y de facon demontree',
+                'F_Y': rc['nombre'], 'dim_F': rc['dim_F'], 'K': rc['K'],
+                'equations_inertes': rc['equations_inertes'],
+                'porteurs': port}
 
     v = (rng.randint(0, p, size=base.shape[0]) @ base) % p
     fs = {}
@@ -237,10 +264,12 @@ def analyser(anneau, amb, b, c, base, offsets, dims, degres, p, rng):
             vals = verifier(vx, vy, vz)
             return {'etat': 'ok', 'lieu_de_base': all(x == 0 for x in vals.values()),
                     'z': list(vz), 'x': list(vx), 'y': list(vy),
+                    'F_Y': rc['nombre'], 'dim_F': rc['dim_F'], 'K': rc['K'],
                     'n_racines': len(racines),
                     'verification': {str(k): int(x) for k, x in vals.items()},
                     'temoin_verifie': all(x == 0 for x in vals.values())}
-    return {'etat': 'ok', 'lieu_de_base': False, 'n_racines': len(racines)}
+    return {'etat': 'ok', 'lieu_de_base': False, 'F_Y': rc['nombre'],
+            'n_racines': len(racines)}
 
 
 def principal():
@@ -307,7 +336,7 @@ def principal():
             if out['etat'] != 'ok' or not out['solutions']:
                 continue
             for s in out['solutions']:
-                r = analyser(A, amb, b, c, s['base'], out['offsets'],
+                r = analyser(A, amb, cfg, b, c, s['base'], out['offsets'],
                              out['dims'], out['degres'], p,
                              np.random.RandomState(7))
                 r.update({'cicy': d['cicy'], 'groupe': d['groupe']})
@@ -316,7 +345,7 @@ def principal():
                 if r.get('etat') != 'ok':
                     cle = r['etat']
                 elif r['lieu_de_base']:
-                    cle = 'LIEU DE BASE (temoin verifie)'
+                    cle = f"LIEU DE BASE (temoin verifie, sur Y : F.Y = {r['F_Y']})"
                 elif r.get('x') is not None:
                     # un temoin propose mais qui ne s'annule pas : c'est le
                     # raisonnement qui est faux, pas la geometrie.

@@ -6,39 +6,56 @@
 > le cocycle de `#7669`, listait six candidats « réellement contraints », et
 > annonçait 15 tests. Aucune de ces trois affirmations ne tient : le verrou est
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
-> non une propriété des candidats, et la suite compte 46 tests.
+> non une propriété des candidats, et la suite compte 47 tests.
 
 ---
 
 ## 0. Où reprendre — point d'entrée
 
-**État au 21 août 2026.** Dépôt à `35f08c0` (§5.38) et au commit de
-documentation qui le suit, **46 tests verts**,
-`python tests_regression.py` avant toute chose. `lieu_de_base_rv3.jsonl` a été
-**régénéré** sous la garde `F ∩ Y` : 944 lignes sur 944 portent `F·Y = 2` et
-`dim F = K`. Environnement : Windows, PowerShell (`;` et non `&&`, `Tee-Object`,
-`python -u`).
+**État au 24 août 2026.** **47 tests verts**, `python tests_regression.py`
+avant toute chose. Environnement : Windows, PowerShell (`;` et non `&&`,
+`Tee-Object`, `python -u`).
 
-**Le catalogue n'a plus de reliquat indéterminé.** Toute ligne λ porte un
-verdict : survivante, éliminée par Hoppe, ou éliminée parce que `V = ker f`
-n'est pas un fibré (§5.37, §5.38).
+**Le port des §5.36 à §5.38 est FAIT.** `scan_wilson6` est terminé —
+5 636 lots sur 5 636, 505 601 lignes, une seule empreinte de code, zéro
+identité contradictoire, 18 contrôles d'orbite à zéro discordance. Le lieu de
+base est branché dans `equivariance_f.analyser` : une ligne λ dont le lieu de
+base est démontré sur Y sort `fibre = false`, **écartée** et non plus
+indéterminée (§5.39).
 
-**Le balayage qui fait foi est `scan_wilson5`** — 5 636 lots sur 5 636, une
-seule version du code, zéro identité contradictoire, zéro discordance d'orbite,
-couverture complète (§5.35). **Mais il n'est plus à jour**, et c'est maintenant
-le seul écart entre le catalogue et son fichier de référence.
+```
+SURVIT              34 885   (34 733 dans scan_wilson5 : +152, et 0 PERDU)
+non fibrees         28 006   demontrees, temoin resubstitue, sur Y
+indeterminees       34 693   TOUTES a rank_C = 1 / rang_V = 4
+ecartees            36 898   hors domaine, charges non permutees, etc.
+ancres              2 440 identites sur 2 440, 0 ecart, 0 absente
+reliquat            ZERO sur les deux strates traitees
+```
+
+**Le balayage qui fait foi est désormais `scan_wilson6`.** `scan_wilson5`
+reste en place comme base de comparaison — c'est lui qui a permis de mesurer
+que rien n'a été perdu.
+
+**Le reliquat indéterminé n'est pas nul, et ne l'a jamais été.** Le §5.38
+l'affirmait ; le décompte le dément. Il vaut **686 lignes λ** — 34 693 dans le
+fichier une fois répliquées — sur une **troisième strate**,
+`rank_C = 1 / rang_V = 4`, que rien n'avait examinée parce que le tableau du
+§5.37 la portait « inchangée ». C'est le plus gros des trois reliquats, plus
+gros que celui que le §5.37 a tranché. Voir §5.39.
 
 **Où vivent les résultats, et lesquels git protège.**
 
 | fichier | ce qu'il porte | suivi |
 |---|---|---|
-| `scan_wilson5/results_equivariance_f.jsonl` | le balayage de référence — 505 601 lignes, une seule version du code (§5.35) | **non** |
+| `scan_wilson5/results_equivariance_f.jsonl` | l'ancien balayage de référence, gardé comme base de comparaison (§5.35) | **non** |
 | `tous_indetermines.jsonl` | les verdicts `rank_C = 2` obtenus après la levée des gardes (§5.36, §5.37) | oui |
 | `lieu_de_base_rv3.jsonl` | 944 lignes : `f` a un lieu de base **sur Y**, témoin resubstitué (§5.37) | oui |
 | `rencontre_F_Y.jsonl` | le nombre d'intersection `F·Y` des 472, qui justifie les 944 (§5.37) | oui |
 | `lieu_de_base_rc2.jsonl` | 34 lignes : même verdict à `rank_C = 2`, par chute du rang (§5.38) | oui |
 | `echantillon_rank_c2.jsonl`, `verdict_z4.json` | les mesures de coût et le verdict `#7745` (§5.36) | oui |
 | `comparaison_w4_w5.json` | la comparaison des deux côtés qui a clos le §5.35 | oui |
+| `comparaison_w5_w6.json` | la comparaison qui clôt le §5.39 : **152 SURVIT gagnés, 0 perdu** | oui |
+| `scan_wilson6/results_equivariance_f.jsonl` | **le balayage qui fait foi** — 505 601 lignes, porte les verdicts des §5.36 à §5.38 (§5.39) | **non** |
 
 **Le seul fichier que git ne protège pas est celui qui fait foi.** Le
 `.gitignore` écarte `scan_*/`, ce qui était juste tant qu'un scan n'était qu'une
@@ -47,20 +64,23 @@ a établi qu'un balayage refait n'est pas garanti identique — c'est tout son
 propos. Le supprimer ou l'écraser est donc irréversible en pratique. À décider :
 le suivre explicitement (`git add -f`), ou l'archiver hors dépôt. En attendant,
 **ne jamais passer `--reset` sur `scan_wilson5`, et ne pas nettoyer les
-`scan_*` sans l'exclure nommément.**
+`scan_*` sans l'exclure nommément.** `run_propre.ps1` porte désormais deux
+gardes qui refusent d'écrire dans le dossier source ou dans `scan_wilson5` —
+elles ne remplacent pas la prudence, elles rattrapent la faute de frappe.
+La même remarque vaut maintenant pour `scan_wilson6`, qui coûte le même prix.
 
 Les autres `scan_*`, `output_*`, `test_*` et les `*.log` sont, eux, de vraies
 sorties jetables — environ 600 Mo dont le dépôt n'a pas besoin.
 
 **Le travail suivant, dans l'ordre :**
 
-1. **Porter les verdicts des §5.36 à §5.38 dans `scan_wilson5`.** 68 lignes λ
-   survivantes à rank_C = 2 que le fichier compte encore comme indéterminées,
-   944 + 34 lignes à éliminer parce que `f` y a un lieu de base démontré **sur
-   Y**. C'est un balayage, donc une décision de coût — et le marquage de
-   version signalera, correctement, un fichier à deux états du code. **Par un
-   vrai balayage, jamais en rapiéçant le JSONL : ce serait la maladie du
-   §5.35.**
+1. **Trancher la strate `rank_C = 1 / rang_V = 4`** — les 686 lignes λ que le
+   §5.38 croyait inexistantes. Sa forme est connue et favorable : **une seule
+   configuration répétée**, trois facteurs porteurs tous des P¹, 91 CICYs,
+   683 lignes sur 686. C'est le §5.37 dont le quatrième `b` est scindé en
+   deux. Mais l'avertissement du §5.38 vaut en entier — `f` y a **cinq**
+   composantes et non quatre, donc le décompte de dimensions est à refaire,
+   pas à recopier (§5.39).
 2. **Construire le bloc `corr`** (Čech → ordinaire, différentielle de Koszul,
    §5.32). C'est ce qui décide de `#6947` : sa charge `c₁ + b₄` donne
    `dim(S/I) = 84` contre `χ = 76`, rien de certifié, et les 8 unités
@@ -92,7 +112,16 @@ dont une charge a `dim(S/I) ≠ h⁰`.
 - **les 34 dernières lignes λ**, à `rank_C = 2` : l'argument du §5.37 y garde sa
   forme et perd son issue, car le lieu de base y est non vide pour **tout** `f`.
   Ce qui tranche est la chute du rang sous équivariance — **34 sur 34, rang 2
-  contre 3 en générique, dix mineurs nuls, `F·Y = 4`** (§5.38).
+  contre 3 en générique, dix mineurs nuls, `F·Y = 4`** (§5.38) ;
+- **le port dans le balayage**, en cours : le lieu de base est branché dans
+  `equivariance_f.analyser`, `fibre` remplace le mot valise, et le reliquat est
+  **nul sur les deux strates traitées**, 2 440 identités sur 2 440, et
+  **0 SURVIT perdu**. Le contrôle du port a demandé **cinq** corrections,
+  toutes du même défaut : **il comparait deux choses différentes en déclarant
+  qu'elles différaient** (§5.39) ;
+- **une troisième strate**, que personne n'avait regardée : les 686 lignes λ à
+  `rank_C = 1 / rang_V = 4`. Le §5.38 annonçait un reliquat nul ; c'est le plus
+  gros des trois (§5.39).
 
 **La discipline qui a trouvé tous les défauts** est au §8 — en particulier la
 *règle des filtres*. Le §5.34 en donne la forme la plus dure (le contrôle et
@@ -102,7 +131,10 @@ et désigne le mauvais coupable ; le §5.36 le booléen qui confond une charge s
 situations demandant trois actions opposées — puis, une section plus loin, un
 test à deux volets opposés qui figeait la même question incomplète des deux
 côtés ; le §5.38 un critère qu'on transpose en gardant sa forme et en perdant
-son issue.
+son issue ; le §5.39 un contrôle qui compare deux mailles différentes, puis
+déduit son facteur d'échelle des données qu'il contrôle, puis mesure la
+complétude contre une référence elle-même incomplète — trois fois le même
+défaut, trois visages, et à chaque fois il désignait le calcul comme fautif.
 
 ---
 
@@ -150,24 +182,29 @@ plafonne à Pati–Salam ou SU(5) flipped. Aller plus loin demande un Γ plus gr
 
 Ils sont **intacts après le §5.34** : σ y est l'identité.
 
-### 2.2 Le balayage qui fait foi — `scan_wilson5`
+### 2.2 Le balayage qui fait foi — `scan_wilson6`
 
 Le générateur qui a produit `#6890` et `#6947` tirait **dix** configurations au
 hasard dans une famille de 2 201 (§5.23). La famille est maintenant **énumérée**.
-Le scan de référence est `scan_wilson5` (§5.35), recalculé de bout en bout dans
-un seul état du code :
+Le scan de référence est `scan_wilson6` (§5.39), recalculé de bout en bout dans
+un seul état du code, et portant les verdicts des §5.36 à §5.38. Les chiffres
+ci-dessous sont ceux de `scan_wilson5` (§5.35), dont il ne diffère que par ce
+que le port a changé — **152 SURVIT gagnés, 0 perdu**, et 28 006 lignes qui
+passent d'`indéterminé` à `écarté, pas un fibré` :
 
 | | |
 |---|---|
 | lignes de verdict | 505 601 |
-| **SURVIT** | **34 733** — toutes SO(10), rang 4, n_gen(X/Γ) = 3 |
+| **SURVIT** | **34 885** — toutes SO(10), rang 4, n_gen(X/Γ) = 3 (34 733 avant le port) |
 | (B, C) distincts | 2 857, sur **91 CICYs** |
 | orbites sous Aut(config) (§5.25) | **691** |
 | discordances d'orbite | **0** sur 18 couples réellement comparés |
-| versions du code présentes | **1** (`45a6ce28793e`) |
+| versions du code présentes | **1** (`68ca0b7c80da`, 37 fichiers surveillés) |
+| non fibrées (§5.37, §5.38) | **28 006** |
+| indéterminées | **34 693**, toutes à `rank_C = 1 / rang_V = 4` |
 | identités contradictoires | **0** |
 | couverture | **56 134 réalisations sur 56 134** |
-| groupes | ℤ₂ : 32 533 · ℤ₂×ℤ₂ : 2 200 |
+| groupes | ℤ₂ : 32 533 · ℤ₂×ℤ₂ : 2 200 — **ventilation de `scan_wilson5`, non recomptée après le port** ; leur somme fait 34 733, pas 34 885 |
 
 `#6890` y donne 12 orbites, `#6947` 1, `#6715` 3. Autrement dit : les deux
 candidats du §2.1 ne sont pas rares, ils étaient **seuls engendrés**.
@@ -268,7 +305,7 @@ cy_landscape/
     └── cohomology.py          extraction du spectre (partiellement obsolète, §6)
 
 racine/
-├── tests_regression.py        46 tests — À LANCER AVANT CHAQUE SCAN
+├── tests_regression.py        47 tests — À LANCER AVANT CHAQUE SCAN
 ├── resume_cible.py            dépouillement d'un scan ciblé
 ├── diagnostic_par.py          diagnostic du parallélisme (coût, Pool, contexte)
 ├── validate_cohomology.py     harnais de validation du socle
@@ -281,7 +318,10 @@ racine/
 ├── empreinte_code.py          version du code, écrite dans chaque ligne     [+]
 ├── lieu_de_base_rv3.py        lieu de base EXACT, rank_C = 1 / rang_V = 3   [+]
 ├── lieu_de_base_rc2.py        lieu de base EXACT, rank_C = 2 (mineurs 2×2)  [+]
-└── rencontre_F_Y.py           le témoin est-il SUR Y ? (garde obligatoire)  [+]
+├── rencontre_F_Y.py           le témoin est-il SUR Y ? (garde obligatoire)  [+]
+├── compter_strates.py         coût du branchement, par strate (§5.39)       [+]
+├── ancres_port.py             le balayage reproduit-il les §5.36 à §5.38 ?  [+]
+└── diag_ecart.py              σ ou vrai défaut ? ventilation par tranche    [+]
 ```
 
 `[+]` = ajouté lors de la session « équivariance », ou réparé depuis (§5.10,
@@ -2928,7 +2968,17 @@ les quatre `fᵢ` s'annulent au point exhibé.
 | rank_C=2, rV=3 — 2 006 λ | *aucun verdict* | 1 904 éliminés, **68 survivants**, 34 en attente |
 
 Le reliquat indéterminé passe de **1 472 candidats à 34 lignes λ** : celles qui
-passent Hoppe à rank_C = 2 sans certificat de surjectivité. La même question
+passent Hoppe à rank_C = 2 sans certificat de surjectivité.
+
+> **RECTIFIÉ AU §5.39.** « 34 lignes λ » ne compte que la strate `rank_C = 2`.
+> La ligne « inchangé » du tableau ci-dessus en cache **686 autres**, à
+> `rank_C = 1 / rang_V = 4`, dans exactement la même situation — Hoppe passe,
+> la surjectivité n'est pas certifiée. Personne ne les a regardées, précisément
+> parce que le mot « inchangé » dispense de regarder. Et la colonne
+> « indéterminés » du tableau du décompte par strate compte les candidats
+> **sans aucun verdict**, ceux que la garde `len(c) == 1` bloquait — pas le
+> champ `indetermine` du fichier. Les deux lectures du même mot, une fois de
+> plus. La même question
 s'y pose — lieu de base réel ou certificat trop court — et demandera
 l'équivalent de `lieu_de_base_rv3.py` pour rank_C = 2, où le lieu de base est
 celui des **mineurs 2×2** et non des `fᵢ`.
@@ -3042,16 +3092,31 @@ insiste maintenant sur plusieurs tirages, et le contraste est complet, 34 sur
 | strate | lignes λ | verdict |
 |---|---|---|
 | rank_C=1, rV=3 | 944 | éliminées — lieu de base sur Y (§5.37) |
-| rank_C=1, rV=4 | 2 506 | **712 survivantes** |
+| rank_C=1, rV=4 | 2 506 | **712 survivantes**, 1 108 éliminées par Hoppe, **686 sans verdict** (§5.39) |
 | rank_C=2, rV=3 | 2 006 | 1 904 éliminées par Hoppe, **68 survivantes**, 34 éliminées ici |
 
-**Le reliquat indéterminé est nul.** Toute ligne λ du catalogue porte
+> **CORRIGÉ AU §5.39.** Ce qui suivait — « le reliquat indéterminé est nul » —
+> était faux, et faux de la façon que cette section reproche justement à ses
+> propres chiffres : écrit une fois, puis reconduit. Le reliquat vaut
+> **686 lignes λ**, sur une strate que le tableau ci-dessus porte
+> « inchangée » et que personne n'a donc regardée. Le texte d'origine est
+> conservé ci-dessous, barré par cette note, parce qu'un document qui corrige
+> en silence ne vaut pas mieux qu'un filtre qui trie en silence.
+
+~~**Le reliquat indéterminé est nul.** Toute ligne λ du catalogue porte
 maintenant un verdict : survivante, éliminée par Hoppe, ou éliminée parce que
 `V = ker f` n'est pas un fibré. Le mot `indetermine` du §5.37 ne recouvre plus
-rien.
+rien.~~
+
+Ce qui est exact : le reliquat est nul **sur les deux strates traitées**,
+`rank_C = 1 / rang_V = 3` et `rank_C = 2 / rang_V = 3`. La troisième,
+`rank_C = 1 / rang_V = 4`, porte 686 lignes λ qui passent Hoppe sans
+certificat de surjectivité — exactement la situation des 944 et des 34, sur
+une strate pour laquelle aucun module n'existe.
 
 **Ces verdicts ne sont toujours pas dans `scan_wilson5`**, et c'est désormais
-le seul travail qui sépare le catalogue de son fichier de référence.
+le seul travail qui sépare le catalogue de son fichier de référence. Il est en
+cours dans `scan_wilson6` (§5.39).
 
 #### Trois choses trouvées en vérifiant l'état de la suite
 
@@ -3086,6 +3151,358 @@ vérifiable d'un coup d'œil.
 |---|---|---|
 | **§5.37** | **le témoin fixe les porteurs et laisse `F` libre — `F ∩ Y ≠ ∅` n'a jamais été demandé** | 944 éliminations démontrées, alors que le point de base pouvait être hors de Y, et que la resubstitution qui les valide n'était pas bien définie |
 | **§5.38** | **un critère transposé garde sa forme et perd son issue** | un lieu de base non vide lu comme une élimination — alors qu'il est non vide pour **tout** `f` de la strate, équivariant ou non |
+
+---
+
+### 5.39 Porter les verdicts dans le balayage — et le contrôle qui accusait le calcul
+
+Les §5.36 à §5.38 ont tranché 978 lignes λ et fait survivre 68 candidats que
+`scan_wilson5` compte encore comme indéterminés. Tant que ces verdicts vivent
+dans `tous_indetermines.jsonl`, `lieu_de_base_rv3.jsonl` et
+`lieu_de_base_rc2.jsonl`, le fichier qui fait foi dit autre chose que le
+catalogue. Cette section porte l'écart dans le balayage — et raconte surtout
+ce qu'a coûté de le **vérifier**.
+
+#### Un tiers du travail n'existait pas
+
+La §0 annonçait trois choses à porter. La première y était déjà : la levée des
+gardes `len(c) == 1` du §5.36 est dans `equivariance_f.analyser` depuis ce
+§5.36. Un balayage à neuf produit donc tout seul les 68 survivants à
+`rank_C = 2` *et* l'élimination de `#7745` — par `hoppe_complet = False`,
+valeurs `{1: 0, 2: 1}`, la signature du §5.36. Rien à coder ; il fallait
+seulement balayer.
+
+Restaient les §5.37 et §5.38, dont les modules vivaient hors du balayage. Leur
+signature est, au caractère près, ce que `analyser` a sous la main à l'endroit
+où `f_sans_point_base` échoue :
+
+```
+analyser(anneau, amb, cfg, b, c, base, offsets, dims, degres, p, rng)
+```
+
+Le branchement est donc mécanique. Ce qui demande de la discipline, c'est le
+verdict, le comptage et le coût.
+
+#### Ce qui élimine, et ce qui n'élimine pas
+
+Un seul chemin élimine : un témoin **exhibé**, **resubstitué**, et démontré
+**sur Y**. Les trois conditions ensemble, jamais deux sur trois — `F·Y > 0`
+pour les deux strates, les dix mineurs nuls pour la seconde. Tout le reste
+laisse la ligne indéterminée, **avec son motif écrit**.
+
+Et `fibre` ne vaut **jamais** `True`. Il vaut `False` (démontré non fibré) ou
+`None` (pas décidé) : rien dans ce chemin ne démontre que `V` *est* un fibré,
+et un `True` y serait un zéro mis à la place d'un non-calcul.
+
+Le mot `indetermine` cesse donc de recouvrir « ce n'est pas un fibré », ce qui
+était l'objet du §5.37 — mais le fichier le disait encore.
+
+#### Trois conséquences qui ne se voient pas dans le verdict
+
+- **`empreinte_code` s'élargit.** Les trois modules de lieu de base y entrent.
+  Depuis que le balayage les appelle, une correction dans
+  `lieu_de_base_rv3.py` change des verdicts du balayage ; les laisser dehors
+  aurait rejoué le §5.35 — un fichier dont l'empreinte ne bouge pas alors que
+  le code qui l'écrit a changé — sur la moitié **neuve** du verdict, celle que
+  personne n'aurait songé à soupçonner. 37 fichiers surveillés au lieu de 34.
+- **`non_fibres` entre dans la recette.** Compteur distinct de `indetermines`,
+  jusque dans le checkpoint, et recompté par `retirer_lots.py --verifier` au
+  même titre que les trois autres : un compteur qui ne se vérifie pas est un
+  compteur qu'on croit.
+- **`fibre` entre dans `_cle_verdict`.** Deux membres d'une orbite doivent
+  s'accorder non seulement sur « survit » mais sur « ce n'est pas un fibré »,
+  sinon le repli redevient une hypothèse invisible sur la moitié neuve du
+  verdict (§5.23, §5.25). C'est le **verdict** qui entre, pas la mesure : le
+  témoin et `F·Y` sont permutés par l'automorphisme et différeraient
+  légitimement, comme le degré témoin de la surjectivité.
+
+#### Le coût, mesuré avant d'être dépensé
+
+`compter_strates.py` ventile `scan_wilson5` sans rien calculer :
+
+```
+34 693 lignes   rank_C=1, rang_V=4   AUCUN MODULE -> sortie au test de forme
+27 794 lignes   rank_C=1, rang_V=3   lieu_de_base_rv3
+```
+
+Le branchement porte donc sur 27 794 lignes et non sur les 505 601 du fichier :
+les deux modules commencent par un test de forme purement combinatoire, et le
+cas « pas ma strate » coûte quelques microsecondes. La mesure a été faite avant
+de lancer, pas déduite d'une moyenne — c'est la leçon du §5.37, où une
+demi-heure de mesure avait remplacé trente heures extrapolées.
+
+#### Le balayage, terminé
+
+Le balayage écrit dans `scan_wilson6`, jamais dans `scan_wilson5` : modifier
+`equivariance_f.py` change l'empreinte du code, et reprendre dans le fichier de
+référence y ferait cohabiter deux versions — ce que le §5.35 a coûté
+4 049 candidats. Deux gardes de `run_propre.ps1` refusent maintenant d'écrire
+dans le dossier source ou dans `scan_wilson5`.
+
+**5 636 lots sur 5 636, 505 601 lignes** — le même compte que `scan_wilson5`,
+sur le même domaine.
+
+```
+recette   : 4 compteurs au chiffre pres, UNE empreinte (68ca0b7c80da,
+            37 fichiers surveilles), 0 identite contradictoire
+orbites   : 18 membres non representants reevalues, 0 discordance
+ancres    : 2 440 identites sur 2 440, 0 ecart, 0 absente
+reliquat  : ZERO sur rank_C=1/rV=3 et rank_C=2/rV=3
+contraste : 96 controles equivariant/generique sur l'echantillon de 20 taches,
+            96 fois le generique N'ELIMINE PAS
+```
+
+Le catalogue, en lignes de verdict :
+
+| | `scan_wilson5` | `scan_wilson6` |
+|---|---|---|
+| SURVIT | 34 733 | **34 885** |
+| non fibrées (lieu de base, §5.37 / §5.38) | — | **28 006** |
+| indéterminées | 62 699 | **34 693** — toutes à `rank_C = 1 / rang_V = 4` |
+| écartées avant évaluation | 36 898 | 36 898 |
+
+Le branchement lui-même, en représentants d'orbite : **3 766 éliminations à
+`rank_C = 1 / rang_V = 3`**, **113 à `rank_C = 2 / rang_V = 3`**, et
+**3 971 lignes laissées indéterminées** avec le motif `strate sans module`
+écrit dans chacune.
+
+#### Ce que la comparaison des deux côtés établit
+
+```
+couverture : 14 943 identites communes, 0 d'un seul cote
+domaine    : 0 « hors domaine » d'un cote et evaluee de l'autre, DANS LES DEUX SENS
+SURVIT     : 152 gagnes, 0 PERDU     (34 733 -> 34 885)
+```
+
+**Zéro SURVIT perdu.** C'est le contrôle qui compte, et il est dans le sens du
+§5.34 : un verdict favorable qui disparaît serait le symptôme d'un branchement
+qui élimine à tort. Les 152 gagnés sont les survivants à `rank_C = 2` que la
+levée des gardes du §5.36 fait apparaître, répliqués sur leurs orbites.
+
+Et les 28 006 non fibrées ne sont **pas** des SURVIT perdus : elles étaient
+déjà éliminées dans `scan_wilson5`, mais sous le mot `indetermine`. Ce que le
+port change n'est pas leur sort, c'est ce que le fichier en dit.
+
+#### Le contrôle accusait le calcul — cinq fois
+
+Le branchement a été juste du premier coup. Son **contrôle** ne l'a pas été, et
+les cinq corrections qu'il a fallu sont le même défaut sous cinq visages :
+*le contrôle et l'objet contrôlé ne portaient pas la même chose, et le contrôle
+désignait le calcul comme fautif.*
+
+**1. La maille.** `ancres_port.py` compare à l'identité `(cicy, b, c, groupe)`.
+Or `echantillon_rank_c2.py`, qui a produit la référence, n'a évalué **qu'une
+réalisation** de Γ par couple ; le balayage les évalue **toutes**. Sur `#4078`,
+Braun en donne quatre : la référence portait 2 éliminations, le balayage en
+portait 8, et l'ancre a crié sur **35 identités sur 35** — alors que les
+verdicts concordaient parfaitement, réalisation par réalisation.
+
+Correction : un facteur `r` déduit du nombre **total** de lignes, une fois par
+identité, puis **imposé à chaque champ**. Un `r` ajusté champ par champ serait
+un paramètre libre, donc un accord garanti. Sous cette forme le contrôle teste
+deux choses au lieu d'une — que le balayage reproduit la référence, et que les
+`r` réalisations s'accordent entre elles — et il **affiche** `r` : un facteur
+qu'on divise en silence transforme un accord *sous hypothèse* en accord.
+
+**2. La route.** Deux écarts subsistaient, tous deux à `rank_C = 2`.
+
+Le premier : `echantillon_rank_c2.py` appelle Hoppe **sans** la garde h⁰ qui le
+précède dans le balayage. Un `h⁰(V) ≠ 0` y ressort en `hoppe = False`, valeurs
+`{1: 1}` — car le p = 1 de Hoppe **est** h⁰(V) — là où le balayage tue la ligne
+une étape plus tôt et laisse `hoppe = None`. Même fait, même verdict, deux
+champs.
+
+Le second est une mesure, pas un défaut. Sur `#4078` à `rank_C = 2`, les quatre
+réalisations de ℤ₂ **ne s'accordent pas** :
+
+```
+2 realisations : dim equivariant 21/43 -> Hoppe passe -> ECARTEE par le lieu de base
+2 realisations : dim equivariant 24/43 -> Hoppe False {1:0, 2:1} -> ECARTEE par Hoppe
+```
+
+C'est le §5.35 sur les éliminations : σ est une propriété de la **réalisation**,
+pas du nom du groupe. Exiger la même route, c'était exiger que σ n'existe pas.
+
+Correction : deux niveaux. Le **niveau 1**, bloquant, est l'**issue** — survit /
+éliminée / indéterminée, où les deux sens du §5.34 tombent tous les deux. Le
+**niveau 2**, la **route**, est compté et affiché, pas exigé.
+
+Relâcher un contrôle jusqu'à ce qu'il passe est la faute que ce dépôt traque.
+En échange, une ancre **plus dure** a été mise en face, qui ne dépend d'aucune
+route ni d'aucun facteur :
+
+> **Sur les strates (1,3) et (2,3), le reliquat indéterminé doit être nul.**
+
+C'est l'énoncé même des §5.37 et §5.38. Il ne se contourne pas en changeant de
+route, et il tombe dès que le branchement cesse d'agir — les lignes redeviennent
+`indetermine`.
+
+**3. Les partielles.** Un balayage fractionné laisse des identités dont tous les
+lots ne sont pas faits. L'ancre les comptait comme des écarts : chaque fin de
+session se terminait sur un `ARRET` rouge qui ne désignait aucun défaut. Une
+alerte qui crie à chaque fois cesse d'être lue, ce qui revient à ne pas l'avoir.
+
+**4. La complétude mesurée contre une référence incomplète.** Le test de la
+correction précédente était un modulo : « si le compte observé n'est pas un
+multiple de la référence, l'identité est partielle ». Sur `#480 / ℤ₂×ℤ₂`, une
+identité portait 384 lignes pour une référence à 4 λ — un multiple de 4. Elle
+passait donc pour **complète**, avec `r = 96`, alors que ses voisines en
+portaient 1 408 et qu'il lui manquait **seize tranches sur vingt-deux**. On
+comparait 96 réalisations à la référence multipliée par 96, sans savoir qu'il
+en manquait 256.
+
+Le remède évident — comparer `r` aux identités voisines de même `(cicy, groupe)`
+— était aveugle ici : pour `(#480, ℤ₂×ℤ₂)` la référence ne contient que **12
+identités**, toutes à la strate (1,4), là où le balayage en porte **118**. Il
+n'y avait aucune voisine à `r = 352` pour dénoncer le `r = 96`. **Une mesure de
+complétude déduite d'une référence incomplète mesure la référence, pas le
+balayage.**
+
+Correction : la complétude se mesure dans le **balayage seul** — le nombre de
+lots écrits par identité, comparé au maximum des identités du même
+`(cicy, groupe)`. Sur le lot partiel, cela a suffi : `#480 Z2 x Z2 : 6 lots sur
+22`, et zéro écart sur 545 identités.
+
+**Et c'était faux aussi.** Le balayage terminé a rendu 66 partielles là où il
+ne devait plus en rester aucune. La supposition — « le nombre de tranches ne
+dépend que de `(cicy, groupe)` » — est démentie par le code : `idx` est filtré
+par `groupes_utiles`, qui est une propriété du **candidat**. Deux candidats
+d'une même CICY et d'un même groupe portent donc légitimement 22 et 23
+tranches, et `diag_ecart.py` le montre en clair sur `#480` — 44 identités à 22
+tranches, 2 à 23.
+
+Correction définitive : **ce script ne mesure plus la complétude du tout**, et
+il le dit. Elle est établie ailleurs, et mieux : par le balayage lui-même
+(« Lots : 5 636 terminés sur 5 636 ») et par `retirer_lots.py --verifier`, qui
+compare les compteurs du checkpoint au recompte du fichier. Un contrôle qui
+mesure mal ce qu'un autre mesure bien ne renforce rien : il ajoute du bruit et
+consomme la confiance.
+
+**5. L'hypothèse que les réalisations s'accordent.** Le niveau 1 exigeait
+`observé = attendu × r` : que les `r` réalisations de Γ rendent toutes le
+verdict de celle qu'avait vue la référence. Sur le balayage terminé, sept
+identités le démentaient, toutes à `rank_C = 1 / rang_V = 4`. `diag_ecart.py`
+a tranché sur `#480 / ℤ₂×ℤ₂` :
+
+```
+23 tranches, TROIS profils distincts
+   12 tranches -> 16 SURVIT, 48 indetermine
+    6 tranches -> 28 SURVIT, 36 indetermine
+    5 tranches -> 64 SURVIT
+et DEUX dimensions d'espace equivariant pour la MEME identite : 17/67 et 16/67
+```
+
+C'est σ — le §5.35, cette fois sur des **survivants** et non sur des
+éliminations. Le contraste interne du diagnostic le confirme : les identités
+tuées par h⁰ équivariant montrent 22 tranches, **un** profil, **une** dimension
+(2/78). Le même script voit l'accord où il y a accord.
+
+Exiger l'égalité, c'était exiger que σ n'existe pas. Ce qu'on peut encore
+exiger sans rien supposer : la réalisation qu'a vue la référence est l'une des
+`r` du balayage, donc elle y contribue ses propres comptes, donc
+
+> `observé[champ] ≥ attendu[champ]`, pour chaque champ.
+
+Nécessaire, non suffisant, mais falsifiable et sans hypothèse : si le
+branchement cessait d'agir, `elimine` chuterait sous l'attendu. C'est le sens
+qui compte, celui du §5.34 — un verdict qui **disparaît**. L'écart à
+`attendu × r` reste mesuré et affiché comme ce qu'il est : une divergence entre
+réalisations.
+
+**Et la mesure ne va pas jusqu'au bout.** Sur les sept identités divergentes,
+deux seulement — `#480` et `#2357` — portent assez de tranches pour que
+plusieurs profils s'y lisent. Les cinq autres tiennent dans **une seule
+tranche** : le proxy « tranche » n'y distingue rien, et « 1 profil » n'y dit
+rien. La divergence y est **déclarée, pas expliquée**. Le balayage n'écrit pas
+l'indice de réalisation ; l'expliquer demanderait de l'ajouter.
+
+#### Une troisième strate, que personne n'avait regardée
+
+En écrivant les ancres, la ventilation de `tous_indetermines.jsonl` a donné
+ceci :
+
+```
+1904  rank_C=2 rV=3  Hoppe False        1108  rank_C=1 rV=4  Hoppe False
+ 944  rank_C=1 rV=3  Hoppe True, surj False    712  rank_C=1 rV=4  SURVIT
+  34  rank_C=2 rV=3  Hoppe True, surj False    686  rank_C=1 rV=4  Hoppe True, surj False
+  68  rank_C=2 rV=3  SURVIT
+```
+
+**686 lignes λ** passent Hoppe sans certificat de surjectivité à
+`rank_C = 1 / rang_V = 4` — exactement la situation des 944 et des 34. Le §5.38
+annonçait un reliquat nul ; il en est le plus gros. Dans `scan_wilson5`, une
+fois répliquées, elles font **34 693 lignes**, contre 27 794 pour la strate que
+le §5.37 a tranchée.
+
+Pourquoi personne ne les avait vues : le tableau du §5.37 porte « 0
+indéterminés » pour cette strate, mais sa colonne compte les candidats **sans
+aucun verdict** — ceux que la garde `len(c) == 1` bloquait, ce que son texte dit
+d'ailleurs. À `rank_C = 1` rien n'était bloqué, d'où le zéro. Ce n'est pas le
+champ `indetermine` du fichier. Et la ligne suivante du tableau du §5.38 porte
+« inchangé », ce qui a suffi à ne plus la regarder.
+
+**Ce qu'elle est, mesuré.** 683 des 686 lignes vivent sur trois facteurs
+porteurs **tous des P¹**, en une seule configuration répétée, 91 CICYs :
+
+```
+b = 3 x O(e_k) + O(e_i) + O(e_j)      c = O(3 e_k + e_i + e_j)
+```
+
+C'est **la configuration du §5.37 dont le quatrième `b` est scindé en deux** :
+là où la strate `rang_V = 3` portait `O(e_i + e_j)`, celle-ci porte `O(e_i)` et
+`O(e_j)`, avec le même `c`. Les trois lignes restantes ont quatre porteurs P¹,
+sur une seule CICY.
+
+**Et l'avertissement du §5.38 vaut en entier.** `f` y a **cinq** composantes et
+non quatre — trois de degré (1,1,2), une (1,0,3), une (0,1,3) — soit cinq
+équations sur une variété de dimension 3, là où le §5.37 en avait quatre dont un
+cubique binaire qui fournissait les racines. La forme de l'argument se
+transpose ; son décompte de dimensions est à refaire, pas à recopier.
+
+#### Le 47ᵉ test
+
+Les tests des §5.37 et §5.38 figent les **modules**. Aucun ne dit ce que le
+**balayage** en fait — or c'est le balayage qu'on modifie, et c'est lui qui
+écrit le fichier qui fait foi. Un branchement mort, un branchement qui élimine
+tout, ou un branchement qui rendrait `fibre = True` passeraient tous les trois
+les tests existants sans en faire tomber un seul.
+
+`t_port_lieu_de_base` fige donc **deux verdicts opposés au niveau de
+`analyser`** : `#4078 / ℤ₂`, strate du §5.37, doit sortir `fibre = False` **et**
+`indetermine = False` — une élimination, pas une attente ; `#6947 SO(10) / ℤ₂`,
+à `rang_V = 4`, doit **survivre** sans que le module soit seulement appelé. Il
+exige en outre le **contraste** sur le premier cas — le même code, sur l'espace
+entier, ne doit pas éliminer — et que `fibre` ne vaille `True` nulle part.
+
+Le même contraste est mesuré **pendant le balayage**, sur un échantillon déclaré
+(`--controle-lieu-de-base`, 20 tâches par défaut), tiré **dans les deux strates
+traitées** : un tirage uniforme sur les ~3 700 tâches serait tombé presque
+toujours sur une strate sans module et aurait rendu un échantillon de contrôles
+**vides** — le §5.25 exactement, où un contrôle tiré au mauvais niveau validait
+un repli entièrement faux.
+
+#### Ce que ça ajoute au §8
+
+| | ce qui devenait invisible | ce que le silence faisait croire |
+|---|---|---|
+| **§5.39** | **le contrôle compare deux mailles différentes** — une réalisation contre toutes | 35 identités « en écart » sur 35, là où les verdicts concordaient réalisation par réalisation |
+| **§5.39** | **le contrôle déduit son facteur d'échelle des données qu'il contrôle** | une identité à 6 tranches sur 22 lue comme complète, parce que son compte tombait juste modulo la référence |
+| **§5.39** | **la complétude mesurée contre une référence elle-même incomplète** | 96 réalisations comparées à la référence multipliée par 96, sans savoir qu'il en manquait 256 |
+| **§5.39** | **le nombre de tranches supposé ne dépendre que de (CICY, groupe)** | 66 identités « en retard » sur un balayage terminé — `groupes_utiles` est une propriété du CANDIDAT |
+| **§5.39** | **le contrôle suppose que les r réalisations de Γ s'accordent** | sept identités « en écart », là où σ fait légitimement diverger des SURVIVANTS (§5.35) |
+| **§5.39** | **le §5.38 annonçait un reliquat nul** | trois strates tranchées, là où la plus grosse — 686 lignes λ, 34 693 dans le fichier — n'avait jamais été regardée |
+
+Les quatre premières sont le §5.34 sous quatre visages, et elles ont un trait
+de plus : **elles accusaient le calcul**. Un contrôle faux qui laisse passer se
+détecte tôt ou tard par une autre référence ; un contrôle faux qui **crie** fait
+perdre du temps sur un défaut qui n'existe pas, et pousse à « corriger » un
+calcul juste. Le seul remède est celui qui a servi ici cinq fois de suite :
+avant de croire l'alerte, aller regarder les lignes qu'elle désigne.
+
+Deux des cinq hypothèses ont d'ailleurs été démenties par une mesure que le
+script **affichait lui-même** — « 0 ligne de contrôle d'orbite écartée », et
+« 3 profils distincts ». Elles n'ont pas demandé un raisonnement, seulement de
+lire ce qui était imprimé.
 
 ---
 
@@ -3156,7 +3573,7 @@ est le gain le plus évident si le besoin s'en fait sentir.
 
 ## 8. Discipline de validation
 
-**`tests_regression.py` — 46 tests, ~5 min. À lancer après chaque modification,
+**`tests_regression.py` — 47 tests, ~5 min. À lancer après chaque modification,
 avant chaque scan.**
 
 Il rassemble toutes les références indépendantes utilisées : c2 sur la bicubique
@@ -3167,7 +3584,7 @@ d'ordre 3, la lecture des entrées symboliques `rt[n]`, l'appariement invariant 
 permutation, les ordres de groupe, la cible d'indice en mode Wilson, et la
 décomposition isotypique.
 
-Huit ajouts de la session « équivariance » :
+Neuf ajouts de la session « équivariance » :
 
 | test | référence indépendante | vérifié en cassant |
 |---|---|---|
@@ -3191,9 +3608,11 @@ Huit ajouts de la session « équivariance » :
 | lieu de base sur P¹×P¹×P¹ | le témoin est **resubstitué** : les quatre f_i doivent s'annuler au point exhibé | oui, **deux verdicts opposés** : équivariant → lieu de base, générique → aucun ; plus l'exigence que le sous-espace équivariant soit propre |
 | `F inter Y` : le témoin est-il sur Y | géométrie connue sans calcul : deux diviseurs (1,0) de P¹×P¹ sont **disjoints**, un (1,0) et un (0,1) se coupent en un point ; puis l'ancre #4078 à F·Y = 2 | oui, **deux verdicts opposés**, dont un sur le vrai chemin de code : la même config, creusée sur ses colonnes libres, doit faire **refuser** le témoin que la garde venait de rendre |
 | lieu de base à rank_C = 2 | l'existence du lieu de base ne discrimine pas — c'est le **rang** des trois formes linéaires qui décide, et il doit chuter de 3 à 2 sous équivariance | oui, **deux verdicts opposés** : équivariant → rang 2, dim F = K, dix mineurs nuls ; générique → rang 3, et le critère doit se déclarer **hors portée** au lieu de conclure |
+| port du lieu de base dans le balayage | ce que `analyser` en fait, et non ce que le module rend : `#4078 / ℤ₂` doit sortir `fibre = False` **et** `indetermine = False`, `#6947 SO(10) / ℤ₂` doit survivre sans que le module soit appelé | oui, **deux verdicts opposés** : un branchement mort fait tomber le premier volet, un branchement qui élimine tout fait tomber le second ; plus le contraste générique et l'interdiction de `fibre = True` |
 
-**Huit** d'entre eux figent **deux verdicts opposés** — le chiffre disait
-« trois » depuis plusieurs sections, sans que personne le recompte —, et trois
+**Neuf** d'entre eux figent **deux verdicts opposés** — le chiffre disait
+« trois » depuis plusieurs sections, sans que personne le recompte, et il faut
+le recompter à chaque ajout sous peine de refaire exactement cela —, et trois
 confrontent le code à une valeur connue d'avance : 125 pour la quintique, 1 pour det V = O, 3 + 3 pour
 la décomposition du spectre. Un test qui n'exigerait que
 la survie passerait pour un module qui accepte tout ; un test qui n'exigerait que
@@ -3244,10 +3663,21 @@ le signale. Le résultat continue de sortir, avec l'apparence d'un tri.
 | **§5.37** | **`indetermine` confond « pas calculé », « calculé sans conclure » et « l'objet n'est pas un fibré »** | 1 472 candidats en attente, dont 472 qui n'auraient jamais dû figurer dans la liste et 1 000 que rien n'empêchait de décider |
 | **§5.37** | **le témoin fixe les facteurs porteurs et laisse `F` libre — `F ∩ Y ≠ ∅` n'a jamais été demandé, et le test figeait la même question incomplète des deux côtés** | 944 éliminations « démontrées », alors que le point de base pouvait être hors de Y — et que la resubstitution qui les valide n'était pas bien définie |
 | **§5.38** | **un critère transposé garde sa forme et perd son issue** | un lieu de base non vide lu comme une élimination, alors qu'il est non vide pour **tout** `f` de la strate |
+| **§5.39** | **le contrôle compare deux mailles différentes** — une réalisation de Γ contre toutes | 35 identités « en écart » sur 35, là où les verdicts concordaient réalisation par réalisation |
+| **§5.39** | **le contrôle déduit son facteur d'échelle des données qu'il contrôle** | une identité à 6 tranches sur 22 lue comme complète, son compte tombant juste modulo la référence |
+| **§5.39** | **la complétude mesurée contre une référence elle-même incomplète** | 96 réalisations comparées à la référence multipliée par 96, sans savoir qu'il en manquait 256 |
+| **§5.39** | **« le reliquat indéterminé est nul » (§5.38)** | trois strates tranchées, là où la plus grosse — 686 lignes λ, 34 693 dans le fichier — n'avait jamais été regardée |
 
 La dernière est d'une espèce à part : rien n'y devient vide. Le contrôle interne
 et l'objet contrôlé partagent le défaut, donc le contrôle le confirme. Un filtre
 qui se vérifie lui-même ne vérifie rien — et c'est indétectable de l'intérieur.
+
+**Les quatre du §5.39 sont d'une espèce à part elles aussi, et opposée : elles
+CRIENT.** Un contrôle faux qui laisse passer finit par être démenti par une
+autre référence ; un contrôle faux qui accuse fait perdre du temps sur un défaut
+qui n'existe pas, et pousse à « corriger » un calcul juste. Le seul remède est
+celui qui a servi cinq fois de suite dans cette session : **avant de croire
+l'alerte, aller regarder les lignes qu'elle désigne.**
 
 La septième est la plus coûteuse : c'est un filtre qu'on n'avait pas identifié
 comme tel. Un générateur incomplet ne se distingue d'un résultat d'absence par
@@ -3292,13 +3722,39 @@ python tests_regression.py
 # La ligne de commande y est FIGEE : --cicy, --replier-orbites,
 # --controle-orbites et --taille-lot entrent dans l'empreinte du
 # checkpoint, et une empreinte qui ne correspond plus fait EFFACER le JSONL.
-.\run_propre.ps1                            # premiere fois (45 tests inclus)
+.\run_propre.ps1                            # premiere fois (47 tests + ancres)
 .\run_propre.ps1 -SansTests                 # sessions suivantes
 .\run_propre.ps1 -SansTests -ControleFinal  # une fois tous les lots 'T' faits
 
-# recette : compteurs d'accord, UNE SEULE version du code, ZERO identite
-# portant a la fois « hors domaine » et « ok ». A passer apres chaque session.
-python retirer_lots.py scan_wilson5 --verifier
+# recette : compteurs d'accord (survivants, indetermines, ecartes, NON_FIBRES),
+# UNE SEULE version du code, ZERO identite portant a la fois « hors domaine »
+# et « ok ». A passer apres chaque session.
+python retirer_lots.py scan_wilson6 --verifier
+
+# ---------------------------------------------------------------------
+# CHAINE DU 5.39 -- porter les verdicts des 5.36 a 5.38 dans le balayage
+# ---------------------------------------------------------------------
+# cout du branchement, AVANT de le payer : ventile les lignes `ok` et croise
+#   la cible par (rank_C, rang_V). Lecture seule.
+python -u compter_strates.py scan_wilson5
+
+# les ancres. Sans dossier : verifie les REFERENCES entre elles (944, 34,
+#   978 = 944 + 34, 780 = 712 + 68). Avec un dossier : compare a l'ISSUE,
+#   declare la ROUTE, et exige le reliquat NUL sur les deux strates traitees.
+#   la completude n'y est PAS mesuree : elle l'est par « Lots : N/N » du
+#   balayage et par `retirer_lots.py --verifier`.
+python -u ancres_port.py
+python -u ancres_port.py scan_wilson6
+
+# pourquoi une identite ne reproduit-elle pas la reference ? Ventile par
+#   tranche (proxy de realisation) et par dimension d'espace equivariant :
+#   plusieurs profils = sigma (5.35), un seul profil = un vrai defaut.
+python -u diag_ecart.py scan_wilson6 --cicy 480 --groupe "Z2 x Z2" --strate 1,4
+
+# le balayage lui-meme. Deux gardes refusent d'ecrire dans le dossier source
+#   ou dans scan_wilson5.
+.\run_propre.ps1 -SansTests -Dossier scan_wilson6
+python -u comparer_scans.py scan_wilson5 scan_wilson6 --sortie comparaison_w5_w6.json
 
 # quelle version du code a ecrit quoi
 python empreinte_code.py scan_wilson5/results_equivariance_f.jsonl

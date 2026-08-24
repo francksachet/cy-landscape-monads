@@ -2,41 +2,74 @@
 #  run_propre.ps1 -- le balayage d'equivariance recalcule A NEUF, dans
 #  un seul etat du code.
 #
-#  POURQUOI A NEUF PLUTOT QU'UNE TROISIEME CHIRURGIE
-#  --------------------------------------------------
-#  `scan_wilson4` melange au moins trois versions du code. Deux
-#  contaminations y ont ete trouvees le meme jour : le sigma du 5.34, et
-#  des lignes « hors domaine » heritees de l'epoque ou `rank_c_max`
-#  valait 1 -- 41 identites y portent A LA FOIS « hors domaine » et
-#  « ok ». La seconde n'etait detectable que parce que `domaine_valide`
-#  est une fonction pure qu'on peut rejouer pour rien. Les verdicts
-#  couteux -- h0 equivariant, Hoppe, surjectivite -- issus des memes
-#  vieux lots ne se revoient pas a ce prix, et rien ne dit qu'ils soient
-#  epargnes.
+#  CE QUE CE RUN-CI PORTE EN PLUS
+#  ------------------------------
+#  Les verdicts des 5.36 a 5.38. Trois d'entre eux etaient deja dans le
+#  code du balayage -- la levee des gardes `len(c) == 1` -- et ne
+#  demandaient qu'un balayage ; le quatrieme est neuf : le lieu de base
+#  des 5.37 / 5.38 est desormais interroge la ou le certificat de
+#  surjectivite echoue, et une ligne dont le lieu de base est DEMONTRE
+#  sur Y sort ECARTEE (`fibre = false`) au lieu d'indeterminee.
 #
-#  RIEN N'EST DETRUIT. On ecrit dans scan_wilson5 ; scan_wilson4 reste
+#  POURQUOI UN NOUVEAU DOSSIER, ET PAS scan_wilson5
+#  ------------------------------------------------
+#  Modifier `equivariance_f.py` change l'empreinte du code. Reprendre
+#  dans scan_wilson5 y ferait cohabiter deux versions -- exactement ce
+#  que le 5.35 a coute (4 049 candidats ecartes a tort), et la recette
+#  `retirer_lots.py --verifier` refuserait le fichier, a juste titre.
+#  scan_wilson5 n'est pas suivi par git : on n'y touche pas, on ne le
+#  --reset pas, et une garde en tete de ce script le refuse.
+#
+#  RIEN N'EST DETRUIT. On ecrit dans scan_wilson6 ; scan_wilson5 reste
 #  en place comme base de comparaison. Pas de --reset, donc pas d'etape
 #  destructive du tout.
 #
-#  Duree : ~29 h 30 a 7 coeurs. Mesuree, pas estimee : la session du
-#  17-18 aout a fait 21 968 realisations en 11 h 33, soit 1,89 s par
-#  realisation, et il y en a 56 134 en tout. Fractionnable a volonte :
-#  le checkpoint est ecrit apres chaque lot.
+#  Duree : ~29 h 30 a 7 coeurs pour le balayage de reference, plus le
+#  cout du lieu de base sur les strates (1,3) et (2,3) -- mesure par
+#  `compter_strates.py` AVANT de lancer. Fractionnable a volonte : le
+#  checkpoint est ecrit apres chaque lot.
 #
-#      .\run_propre.ps1              # premiere fois
-#      .\run_propre.ps1 -SansTests   # sessions suivantes
-#      .\run_propre.ps1 -ControleFinal   # une fois TOUS les lots 'T' faits
+#      .\run_propre.ps1                  # premiere fois (47 tests + ancres)
+#      .\run_propre.ps1 -SansTests       # sessions suivantes
+#      .\run_propre.ps1 -SansTests -ControleFinal   # tous les lots 'T' faits
+#
+#  -Dossier / -Source pour viser autre chose ; -ControleLieu N regle
+#  l'echantillon du controle negatif du lieu de base (0 = aucun, et le
+#  bilan le dira).
 # =====================================================================
 param(
     [switch]$SansTests,
     [switch]$ControleFinal,
-    [int]$Coeurs = 7
+    [int]$Coeurs = 7,
+    [string]$Dossier = 'scan_wilson6',
+    [string]$Source  = 'scan_wilson5',
+    [int]$ControleLieu = 20
 )
 
 $ErrorActionPreference = 'Stop'
-$dossier = 'scan_wilson5'
-$source  = 'scan_wilson4'
+$dossier = $Dossier
+$source  = $Source
 $t0 = Get-Date
+
+# ---------------------------------------------------------------------
+#  GARDE : ne jamais ecrire dans le dossier SOURCE.
+#
+#  `scan_wilson5` n'est pas suivi par git (le .gitignore ecarte scan_*),
+#  il a coute une trentaine d'heures, et le 5.35 a etabli qu'un balayage
+#  refait n'est pas garanti identique. L'ecraser est irreversible en
+#  pratique. Cette garde ne remplace pas la prudence ; elle rattrape la
+#  faute de frappe.
+# ---------------------------------------------------------------------
+if ($dossier -eq $source) {
+    Write-Host "  ARRET : le dossier de sortie est le dossier source ($source)." -ForegroundColor Red
+    Write-Host "  Le balayage porte les verdicts des 5.36 a 5.38 : il ECRIT." -ForegroundColor Red
+    exit 1
+}
+if ($dossier -eq 'scan_wilson5') {
+    Write-Host "  ARRET : scan_wilson5 est le fichier qui fait foi et git ne le protege pas." -ForegroundColor Red
+    Write-Host "  Ecrire ailleurs (-Dossier scan_wilson6)." -ForegroundColor Red
+    exit 1
+}
 
 function Etape($n, $titre) {
     Write-Host ""
@@ -63,10 +96,18 @@ if (-not (Test-Path $entree)) {
 # 1. Le socle. 45 tests.
 # ---------------------------------------------------------------------
 if (-not $SansTests) {
-    Etape 1 "Tests de non-regression (45 tests, ~5 min)"
+    Etape 1 "Tests de non-regression (47 tests, ~5 min)"
     python tests_regression.py
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  Tests en echec -- NE RIEN LANCER." -ForegroundColor Red
+        exit 1
+    }
+    # Les ancres : le branchement reproduit-il les verdicts deja etablis ?
+    # Sur les REFERENCES seules ici -- la comparaison avec le balayage vient
+    # a l'etape 3, une fois qu'il y a quelque chose a comparer.
+    python -u ancres_port.py
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Les ancres des 5.36 a 5.38 ne tombent pas juste -- NE RIEN LANCER." -ForegroundColor Red
         exit 1
     }
 } else {
@@ -94,8 +135,8 @@ if ($ControleFinal) {
 Etape 2 "Equivariance de f, balayage complet (Ctrl-C quand vous voulez)"
 try {
     python -u equivariance_f.py cicyquotients.m cicylist.txt $dossier `
-        --replier-orbites -j $Coeurs |
-        Tee-Object -Append -FilePath scan_wilson5_equiv_f.log
+        --replier-orbites -j $Coeurs --controle-lieu-de-base $ControleLieu |
+        Tee-Object -Append -FilePath "${dossier}_equiv_f.log"
 } finally {
     # -----------------------------------------------------------------
     # 3. Recette, executee meme apres un Ctrl-C. Sur un fichier propre,
@@ -109,9 +150,15 @@ try {
     # -----------------------------------------------------------------
     Etape 3 "Recette : compteurs, version unique, zero contradiction"
     python -u retirer_lots.py $dossier --verifier
+    # Les ancres, cette fois contre le balayage. Sur un lot partiel, les
+    # identites absentes sont annoncees comme telles et ne comptent pas
+    # comme un accord -- un controle vide n'est pas un controle.
+    python -u ancres_port.py $dossier
     Write-Host ""
     Write-Host ("  Session de {0:hh\:mm\:ss}." -f ((Get-Date) - $t0)) -ForegroundColor Green
     Write-Host "  Continuer :  .\run_propre.ps1 -SansTests" -ForegroundColor Green
+    Write-Host "  Comparer les deux balayages, dans les DEUX sens, a la fin :" -ForegroundColor Green
+    Write-Host "     python -u comparer_scans.py scan_wilson5 $dossier --sortie comparaison_w5_w6.json" -ForegroundColor Green
     Write-Host "  Quand le balayage annonce 0 lot a traiter :" -ForegroundColor Green
     Write-Host "               .\run_propre.ps1 -SansTests -ControleFinal" -ForegroundColor Green
     Write-Host ""

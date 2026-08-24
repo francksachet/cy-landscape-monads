@@ -40,8 +40,16 @@ import os
 import hashlib
 
 # Tout ce dont une modification peut changer un verdict.
+#
+# Les trois modules de lieu de base y sont entres avec les §5.37 / §5.38 :
+# depuis que `equivariance_f.analyser` les appelle, une correction dans
+# `lieu_de_base_rv3.py` change des verdicts du balayage. Les laisser dehors
+# aurait reproduit le defaut du §5.35 -- un fichier de resultats dont
+# l'empreinte ne bouge pas alors que le code qui l'ecrit a change -- sur la
+# moitie NEUVE du verdict, celle que personne n'aurait songe a soupconner.
 DOSSIERS = ('cy_landscape/core',)
 FICHIERS = ('equivariance_f.py', 'wilson_match.py',
+            'lieu_de_base_rv3.py', 'lieu_de_base_rc2.py', 'rencontre_F_Y.py',
             'cy_landscape/data/parse_oxford.py')
 
 

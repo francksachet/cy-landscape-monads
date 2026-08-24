@@ -46,6 +46,7 @@ disponible sur ce point.
     survivants   = lignes avec survit
     indetermines = lignes avec etat == 'ok' ET indetermine
     ecartes      = lignes avec etat != 'ok'
+    non_fibres   = lignes avec etat == 'ok' ET fibre is False (§5.37, §5.38)
 
 Usage :
     python -u retirer_lots.py scan_wilson4                  # a blanc
@@ -59,6 +60,25 @@ from collections import Counter
 
 
 HORS_DOMAINE = 'hors domaine (modele S/I non valide)'
+
+
+def _reference(compteurs, cle, recompte):
+    """
+    La valeur du checkpoint pour `cle`, ou `-1` si elle manque -- ce qui
+    provoque un DESACCORD visible, comme il se doit.
+
+    L'exception, une seule, et bornee : un compteur ABSENT du checkpoint
+    dont le recompte vaut ZERO. C'est le cas d'un fichier ecrit avant que ce
+    compteur existe (`non_fibres`, §5.37) : les deux cotes disent la meme
+    chose -- rien -- et exiger l'egalite avec `-1` ferait crier la recette
+    sur `scan_wilson5`, qui est juste. Des que le recompte est non nul, le
+    silence du checkpoint redevient un desaccord : un fichier qui contient
+    des verdicts qu'aucun compteur ne suit est exactement ce que le §5.35
+    cherchait a rendre visible.
+    """
+    if cle not in compteurs:
+        return 0 if recompte == 0 else -1
+    return int(compteurs[cle])
 
 
 def contradictions(chemin):
@@ -96,7 +116,13 @@ def compter(chemin, garder=None):
     Compte les lignes selon la regle de `_ecrire`. `garder(d)` filtre.
     Rend (compteurs, total, survit_total).
     """
-    c = {'survivants': 0, 'indetermines': 0, 'ecartes': 0}
+    # `non_fibres` : les lignes ou V = ker f est DEMONTRE non fibre (§5.37,
+    # §5.38). Il entre dans la recette au meme titre que les trois autres --
+    # un compteur qui ne se verifie pas est un compteur qu'on croit.
+    #
+    # Il n'est PAS reclame aux fichiers ecrits avant le branchement : sur
+    # ceux-la il vaut 0 des deux cotes, et l'accord tient sans rien exiger.
+    c = {'survivants': 0, 'indetermines': 0, 'ecartes': 0, 'non_fibres': 0}
     n = 0
     with open(chemin, encoding='utf-8') as f:
         for ligne in f:
@@ -110,6 +136,7 @@ def compter(chemin, garder=None):
                 c['ecartes'] += 1
             else:
                 c['indetermines'] += bool(d.get('indetermine'))
+                c['non_fibres'] += (d.get('fibre') is False)
             c['survivants'] += bool(d.get('survit'))
     return c, n
 
@@ -167,7 +194,7 @@ def principal():
     # compteraient alors des lignes qui n'existent plus. Ce mode le voit.
     if args.verifier:
         c, n = compter(dst)
-        ref = {k: int(ck['compteurs'].get(k, -1)) for k in c}
+        ref = {k: _reference(ck['compteurs'], k, c[k]) for k in c}
         print(f"\n  {n} lignes dans le JSONL, {len(ck['lots'])} lots au "
               f"checkpoint")
         print(f"    checkpoint : {ref}")
@@ -315,7 +342,7 @@ def principal():
     # ---- garde n.3 : la regle des compteurs se verifie sur l'intact ----
     print(f"\n  verification de la regle des compteurs sur le fichier intact ...")
     avant, n_avant = compter(dst)
-    ref = {k: int(ck['compteurs'].get(k, -1)) for k in avant}
+    ref = {k: _reference(ck['compteurs'], k, avant[k]) for k in avant}
     print(f"    checkpoint : {ref}")
     print(f"    recompte   : {avant}   ({n_avant} lignes)")
     if avant != ref:

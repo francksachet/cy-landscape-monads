@@ -3728,6 +3728,127 @@ def t_lieu_de_base_rc2():
             f"{r['F_Y']}, 10 mineurs nuls ; generique rang 3, hors portee")
 
 
+@test("port du lieu de base dans le balayage : #4078 ECARTE (pas un fibre), #6947 SURVIT intact")
+def t_port_lieu_de_base():
+    """
+    CE QUE CE TEST PROTEGE
+    ----------------------
+    Les tests `t_lieu_de_base_rv3`, `t_rencontre_F_Y` et `t_lieu_de_base_rc2`
+    figent les MODULES. Aucun ne dit ce que le BALAYAGE en fait -- or c'est
+    le balayage qu'on modifie ici, et c'est lui qui ecrit le fichier qui fait
+    foi. Un branchement mort, un branchement qui elimine tout, ou un
+    branchement qui rend `fibre = True` passeraient tous les trois les tests
+    existants sans en faire tomber un seul.
+
+    LES DEUX VERDICTS OPPOSES, AU NIVEAU DE `analyser`
+    --------------------------------------------------
+    (a) #4078 / Z2, strate rank_C = 1 / rang_V = 3 : Hoppe passe, la
+        surjectivite n'est pas certifiee, et le module DEMONTRE un lieu de
+        base sur Y. La ligne doit sortir `fibre = False` ET
+        `indetermine = False` -- c'est tout l'objet du §5.37 : une
+        elimination, pas une attente. Un branchement mort laisserait
+        `indetermine = True`.
+
+    (b) #6947 / Z2, SO(10), rank_C = 1 / rang_V = 4 : ce candidat SURVIT. Le
+        branchement ne doit meme pas etre appele -- `lieu_de_base` reste None
+        -- et `survit` doit rester True. Un branchement qui eliminerait tout
+        fait tomber ce volet.
+
+    LE TROISIEME VOLET : LE CONTRASTE
+    ---------------------------------
+    Sur (a), le meme code joue sur l'espace ENTIER ne doit PAS eliminer. Sans
+    lui, `elimine = True` pourrait etre une constante : c'est le controle que
+    `--controle-lieu-de-base` prend sur echantillon pendant un balayage, ici
+    exige sur un cas.
+
+    ET LE QUATRIEME : `fibre` NE VAUT JAMAIS True
+    ---------------------------------------------
+    Rien dans ce chemin ne demontre que V EST un fibre. Un `True` y serait un
+    zero mis a la place d'un non-calcul -- exigence 2 du §8.
+    """
+    import os
+    import numpy as np
+    ici = os.path.dirname(os.path.abspath(__file__))
+    CICYLIST = os.path.join(ici, 'cicylist.txt')
+    BRAUN_M = os.path.join(ici, 'cicyquotients.m')
+    for f in (BRAUN_M, CICYLIST):
+        if not os.path.exists(f):
+            return f"{os.path.basename(f)} absent - test ignore"
+    from cy_landscape.core.braun_symmetry import parse_symmetries
+    from cy_landscape.data.parse_oxford import load_oxford_file
+    from equivariance_f import analyser, STRATES_LIEU_DE_BASE
+
+    E = {x['num']: x for x in load_oxford_file(CICYLIST)}
+    SYM = parse_symmetries(BRAUN_M)
+
+    # --- (a) la strate du §5.37 : ECARTEE, pas en attente ---------------
+    NUM_A = 4078
+    b_a = [[0, 0, 1, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 1, 0, 0, 0],
+           [1, 1, 0, 0, 0, 0]]
+    c_a = [[1, 1, 3, 0, 0, 0]]
+    assert (len(c_a), len(b_a) - len(c_a)) in STRATES_LIEU_DE_BASE, \
+        "le cas (a) n'est plus dans une strate traitee : le test ne mord plus"
+    e = E[NUM_A]
+    # `controle_lieu=True` : on exige aussi le contraste sur ce cas.
+    la = [L for L in analyser(NUM_A, e['ambient'], np.asarray(e['config']),
+                              b_a, c_a, SYM[NUM_A]['symetries'],
+                              groupes={'Z2'}, controle_lieu=True)
+          if L.get('etat') == 'ok']
+    assert la, f"aucun verdict sur #{NUM_A} / Z2"
+    ecartees = [L for L in la if L.get('fibre') is False]
+    assert ecartees, (
+        "le branchement n'a rien ecarte sur la strate du 5.37 : "
+        f"motifs = {[(L.get('lieu_de_base') or {}).get('motif') for L in la]}")
+    for L in ecartees:
+        assert L['indetermine'] is False, \
+            "ecartee ET indeterminee : le mot valise du 5.37 est revenu"
+        assert L['survit'] is False, "une ligne non fibree ne peut pas survivre"
+        lb = L['lieu_de_base']
+        assert lb['elimine'] and lb['module'] == 'lieu_de_base_rv3', lb
+        m = lb['mesure']
+        assert m['temoin_verifie'] and m['F_Y'] > 0, \
+            f"elimination rendue sans temoin sur Y : {m}"
+        assert m['completion_utilisee'] is False, \
+            ("dim F > K : le nombre n'est plus une classe d'Euler exacte "
+             "mais une completion -- jamais eprouvee (5.37)")
+        # LE CONTRASTE. Le meme code, l'espace entier, ne doit pas eliminer.
+        g = lb['generique']
+        assert g is not None, "controle negatif absent : `elimine` peut etre constant"
+        assert g['elimine'] is False, (
+            "le f GENERIQUE est elimine lui aussi : le branchement eliminerait "
+            "des deux cotes, et le premier volet ne demontrerait rien")
+        assert lb['contraste'] is True, lb['contraste']
+
+    # --- (b) un survivant : le branchement ne doit pas y toucher ---------
+    NUM_B = 6947
+    b_b = [[1, 0, 0, 0, 0], [0, 0, 0, 1, 0], [1, 0, 0, 0, 0],
+           [0, 1, 0, 0, 0], [1, 0, 0, 0, 0]]
+    c_b = [[3, 1, 0, 1, 0]]
+    e = E[NUM_B]
+    lb_ = [L for L in analyser(NUM_B, e['ambient'], np.asarray(e['config']),
+                               b_b, c_b, SYM[NUM_B]['symetries'],
+                               groupes={'Z2'})
+           if L.get('etat') == 'ok']
+    assert lb_, f"aucun verdict sur #{NUM_B} / Z2"
+    survivants = [L for L in lb_ if L.get('survit')]
+    assert survivants, (
+        "#6947 SO(10)/Z2 ne survit plus : un branchement qui elimine tout "
+        "passerait le premier volet, c'est ce volet-ci qui le voit")
+    for L in survivants:
+        assert L['lieu_de_base'] is None, \
+            "le branchement a ete appele sur une ligne qui survit"
+        assert L['fibre'] is None, L['fibre']
+
+    # --- (c) `fibre` ne vaut jamais True, nulle part --------------------
+    assert all(L.get('fibre') in (False, None) for L in la + lb_), \
+        "fibre = True : rien dans ce chemin ne demontre que V EST un fibre"
+
+    n_ec = len(ecartees)
+    return (f"#{NUM_A}/Z2 : {n_ec} ligne(s) ECARTEE(S), F.Y = "
+            f"{ecartees[0]['lieu_de_base']['mesure']['F_Y']}, generique non "
+            f"elimine ; #{NUM_B}/Z2 : {len(survivants)} SURVIT intact(s)")
+
+
 # ======================================================================
 
 def main():

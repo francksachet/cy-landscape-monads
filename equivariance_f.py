@@ -49,6 +49,7 @@ import argparse
 import hashlib
 import threading
 import multiprocessing as mp
+from collections import Counter
 
 # UN SEUL FIL PAR PROCESSUS POUR L'ALGEBRE LINEAIRE.
 #
@@ -94,6 +95,176 @@ from empreinte_code import empreinte_code
 # l'empreinte du checkpoint : voir l'en-tete de `empreinte_code.py` --
 # l'y mettre ferait effacer le JSONL a la premiere virgule modifiee.
 _CODE, _N_FICHIERS_CODE = empreinte_code()
+
+
+# ======================================================================
+# Lieu de base : « indetermine » cesse de recouvrir « ce n'est pas un fibre »
+# ======================================================================
+#
+# POURQUOI CE BLOC EST ICI, ET PAS DANS UN SCRIPT A COTE
+# -------------------------------------------------------
+# Les §5.37 et §5.38 ont tranche 978 lignes lambda que le balayage compte
+# encore comme indeterminees. Tant que ces verdicts vivent dans
+# `lieu_de_base_rv3.jsonl` et `lieu_de_base_rc2.jsonl`, le fichier qui fait
+# foi dit autre chose que le catalogue -- et c'est le dernier ecart entre
+# les deux.
+#
+# Le branchement s'insere exactement la ou `f_sans_point_base` echoue, parce
+# que c'est la que le §5.37 a montre que trois situations differentes
+# portaient le meme mot :
+#
+#     un test jamais lance | un test lance sans conclure | pas un fibre
+#
+# Les trois demandaient trois actions opposees. Le troisieme cas est une
+# ELIMINATION, pas une attente.
+#
+# CE QUI ELIMINE, ET CE QUI N'ELIMINE PAS
+# ---------------------------------------
+# Un seul chemin elimine : un temoin EXHIBE, RESUBSTITUE, et demontre SUR Y.
+# Les trois conditions ensemble, jamais deux sur trois.
+#
+#   rank_C = 1, rang_V = 3 (§5.37) : les f_i s'annulent au point exhibe, et
+#       F.Y > 0 -- sans quoi le point de base peut etre hors de Y, et la
+#       resubstitution qui valide le temoin n'est meme pas bien definie.
+#   rank_C = 2, rang_V = 3 (§5.38) : les dix mineurs 2x2 s'annulent au point
+#       exhibe, et F.Y > 0. L'EXISTENCE du lieu de base n'y discrimine rien,
+#       il est non vide pour TOUT f de la strate ; ce qui tranche est la
+#       chute du rang, qui se lit sur dim F = K -- donc sur F.Y non None.
+#
+# Tout le reste laisse la ligne indeterminee, avec son motif ECRIT. En
+# particulier `fibre` ne vaut JAMAIS True : rien ici ne le demontre. Il vaut
+# False (demontre non fibre) ou None (pas decide) -- §8, exigence 2.
+#
+# LES DEUX STRATES, ET LE SILENCE DES AUTRES
+# ------------------------------------------
+# Deux strates seulement ont un module. Une ligne d'ailleurs ressort
+# `strate sans module` : c'est un NON-CALCUL, et il est compte comme tel.
+# Sans ce compteur, un branchement qui ne toucherait jamais rien se lirait
+# comme un branchement qui ne trouve rien -- le defaut recense dix-huit fois
+# au §8. Le bilan de fin de run affiche les deux cotes.
+#
+# LE CONTROLE NEGATIF
+# -------------------
+# Ce branchement est un filtre, donc il doit pouvoir etre vu REFUSER. Le
+# contraste est celui des deux scripts d'origine : le meme candidat, la meme
+# fonction, tiree dans l'espace ENTIER au lieu du sous-espace equivariant,
+# ne doit pas donner d'elimination (§5.37) ou doit se declarer hors portee
+# par chute de dimension (§5.38). Il coute un second passage complet : il
+# est donc pris sur un ECHANTILLON DECLARE (`--controle-lieu-de-base`), et
+# le bilan dit sur combien de lignes il a porte. Un controle sur un
+# echantillon dont on annonce la taille vaut mieux qu'un controle absent ;
+# un controle absent dont on ne dit rien ne vaut rien.
+
+# (rank_C, rang_V) -> nom du module qui sait trancher cette strate.
+STRATES_LIEU_DE_BASE = {
+    (1, 3): 'lieu_de_base_rv3',
+    (2, 3): 'lieu_de_base_rc2',
+}
+
+
+def _extrait_lieu(r):
+    """Les champs du verdict qui doivent survivre dans le JSONL. On garde ce
+    qui permet de RELIRE la decision -- pas les dix mineurs ni la liste des
+    valeurs de substitution, qui pesent sans rien ajouter a la relecture."""
+    if not isinstance(r, dict):
+        return None
+    garde = ('etat', 'lieu_de_base', 'temoin_verifie', 'temoin_rang_1',
+             'F_Y', 'dim_F', 'K', 'rang_formes', 'dim_Lambda', 'n_racines',
+             'cubique_nul', 'cas', 'x', 'y', 'z')
+    m = {k: r[k] for k in garde if k in r}
+    # La completion par H^(dim F - K) n'a JAMAIS servi (§5.37) : la ligne le
+    # dit, plutot que de laisser croire a un nombre d'Euler exact le jour ou
+    # elle servira.
+    if isinstance(m.get('dim_F'), int) and isinstance(m.get('K'), int):
+        m['completion_utilisee'] = m['dim_F'] > m['K']
+    return m
+
+
+def _verdict_lieu_de_base(anneau, amb, cfg, b, c, base, offsets, dims,
+                          degres, p, rng, base_totale=None):
+    """
+    Rend le verdict de lieu de base pour une ligne lambda, ou la raison de
+    ne pas conclure. Ne leve jamais : une exception ici doit laisser la
+    ligne indeterminee avec un motif lisible, pas faire disparaitre le
+    candidat (§5.23) ni produire une elimination silencieuse.
+
+    `base_totale` non nul declenche le controle negatif sur l'espace entier.
+    """
+    rank_c, rang_v = len(c), len(b) - len(c)
+    strate = (rank_c, rang_v)
+    module = STRATES_LIEU_DE_BASE.get(strate)
+    out = {'strate': [rank_c, rang_v], 'module': module,
+           'elimine': False, 'motif': None, 'mesure': None,
+           'generique': None, 'contraste': None}
+    if module is None:
+        out['motif'] = 'strate sans module'
+        return out
+
+    try:
+        if module == 'lieu_de_base_rv3':
+            from lieu_de_base_rv3 import analyser as _brut
+
+            def _appel(bs, etiquette):
+                return _brut(anneau, amb, cfg, b, c, bs, offsets, dims,
+                             degres, p, rng)
+
+            def _trancher(r):
+                """§5.37 : temoin resubstitue ET demontre sur Y."""
+                if r.get('etat') != 'ok':
+                    return False, r.get('etat')
+                if not r.get('lieu_de_base'):
+                    return False, 'aucun lieu de base trouve'
+                if not r.get('temoin_verifie'):
+                    return False, 'temoin refuse par substitution'
+                fy = r.get('F_Y')
+                if fy is None:
+                    return False, 'dim F < K : critere hors portee'
+                if fy <= 0:
+                    return False, 'F.Y = 0 : rien de demontre'
+                return True, 'lieu de base demontre sur Y'
+        else:
+            from lieu_de_base_rc2 import analyser_rc2 as _brut
+
+            def _appel(bs, etiquette):
+                return _brut(anneau, amb, cfg, b, c, bs, offsets, dims,
+                             degres, p, rng, etiquette)
+
+            def _trancher(r):
+                """§5.38 : les dix mineurs nuls au point exhibe, et F.Y > 0
+                -- c'est-a-dire dim F = K, c'est-a-dire le rang tombe. Un
+                rang 3 rend F.Y None et NE conclut pas."""
+                if r.get('etat') != 'ok':
+                    return False, r.get('etat')
+                if not r.get('temoin_rang_1'):
+                    return False, 'temoin refuse par les mineurs'
+                fy = r.get('F_Y')
+                if fy is None:
+                    return False, 'dim F < K : critere hors portee'
+                if fy <= 0:
+                    return False, 'F.Y = 0 : rien de demontre'
+                return True, 'lieu de base demontre sur Y (rang tombe)'
+
+        r = _appel(base, 'equivariant')
+        elimine, motif = _trancher(r)
+        out['elimine'] = bool(elimine)
+        out['motif'] = motif
+        out['mesure'] = _extrait_lieu(r)
+
+        # --- controle negatif, sur echantillon --------------------------
+        # Il ne change AUCUN verdict : il mesure si le meme code, sur
+        # l'espace entier, REFUSE. Un branchement qui eliminerait des deux
+        # cotes serait un `return True` deguise, et c'est cela qu'on veut
+        # pouvoir voir.
+        if base_totale is not None:
+            g = _appel(base_totale, 'generique')
+            g_elimine, g_motif = _trancher(g)
+            out['generique'] = dict(_extrait_lieu(g) or {},
+                                    elimine=bool(g_elimine), motif=g_motif)
+            out['contraste'] = bool(elimine and not g_elimine)
+    except Exception as exc:
+        out['elimine'] = False
+        out['motif'] = f'erreur ({type(exc).__name__}: {exc})'
+    return out
 
 
 def h0_V_generique(anneau, b_charges, c_charges, p, rng, n_essais=5):
@@ -156,8 +327,14 @@ def n_gen_quotient(cohomology, nom_groupe):
     return chi // o
 
 
-def analyser(cicy_num, amb, cfg, b, c, symetries, groupes=None, graine=0):
-    """Renvoie une liste de lignes de resultat, une par (symetrie, lambda)."""
+def analyser(cicy_num, amb, cfg, b, c, symetries, groupes=None, graine=0,
+             controle_lieu=False):
+    """Renvoie une liste de lignes de resultat, une par (symetrie, lambda).
+
+    `controle_lieu` : cette tache fait partie de l'echantillon sur lequel le
+    verdict de lieu de base est aussi joue sur l'espace ENTIER, pour que le
+    contraste soit mesure et non suppose. Ne change aucun verdict.
+    """
     lignes = []
     # rank_c_max=None : on autorise rank_C >= 2. Les fonctions generalisees
     # (h^0(V), decomposition de H^1(V)) s'y appliquent ; celles qui supposent
@@ -273,6 +450,8 @@ def analyser(cicy_num, amb, cfg, b, c, symetries, groupes=None, graine=0):
                     indetermine = (hoppe['stable'] is None)
 
             surj = None
+            lieu = None
+            fibre = None
             if survit:
                 surj = f_sans_point_base(
                     anneau, b, c, s['base'], out['offsets'], out['dims'],
@@ -280,6 +459,27 @@ def analyser(cicy_num, amb, cfg, b, c, symetries, groupes=None, graine=0):
                     n_essais=2, n_degres=8)
                 if not surj['certifie']:
                     survit, indetermine = False, True
+
+                    # Le certificat est SUFFISANT : son echec ne demontre
+                    # rien. Restent trois lectures -- la liste de degres
+                    # s'arrete trop tot, f a reellement un lieu de base, ou
+                    # la strate n'est pas tranchable ici -- et le §5.37 a
+                    # montre qu'ecrire le meme mot pour les trois avait
+                    # laisse 1 472 candidats en attente dont 472 n'etaient
+                    # pas des fibres. On demande donc, ici et maintenant.
+                    lieu = _verdict_lieu_de_base(
+                        anneau, amb, cfg, b, c, s['base'], out['offsets'],
+                        out['dims'], out['degres'], p,
+                        np.random.RandomState(graine + 9),
+                        base_totale=base_tot if controle_lieu else None)
+                    if lieu['elimine']:
+                        # V = ker f n'est pas un fibre : ce n'est pas un
+                        # candidat en attente, c'est un candidat ECARTE.
+                        # `survit` reste False -- il l'etait deja -- mais
+                        # `indetermine` cesse de l'etre, et c'est tout
+                        # l'objet du §5.37.
+                        fibre = False
+                        indetermine = False
 
             lignes.append({
                 'groupe': sym['nom'], 'etat': 'ok', 'lambda': lam,
@@ -292,6 +492,10 @@ def analyser(cicy_num, amb, cfg, b, c, symetries, groupes=None, graine=0):
                                  {str(k): v for k, v in hoppe['valeurs'].items()},
                 'surjectif_certifie': None if surj is None else bool(surj['certifie']),
                 'surjectif_degre': None if surj is None else surj['degre'],
+                # `fibre` : False = DEMONTRE non fibre (§5.37, §5.38) ;
+                # None = pas decide. Jamais True -- rien ici ne le demontre.
+                'fibre': fibre,
+                'lieu_de_base': lieu,
                 'survit': bool(survit), 'indetermine': bool(indetermine),
             })
     return lignes
@@ -364,7 +568,12 @@ class Progression:
         # de reperer un lot ecrit a moitie (cf. `charger`).
         self.faits = {}
         self.offset_herite = None
-        self.compteurs = {'survivants': 0, 'indetermines': 0, 'ecartes': 0}
+        # `non_fibres` compte les lignes ou V = ker f est DEMONTRE non fibre
+        # (§5.37, §5.38). Il est distinct de `indetermines` : c'est tout
+        # l'objet du branchement, et un compteur qui les melangerait
+        # reproduirait le mot valise que le §5.37 a defait.
+        self.compteurs = {'survivants': 0, 'indetermines': 0, 'ecartes': 0,
+                          'non_fibres': 0}
 
     def charger(self, taille_jsonl=0):
         if not os.path.exists(self.chemin):
@@ -540,6 +749,48 @@ def _echantillon_controle(taches, n, graine=0):
     return sortie
 
 
+def _echantillon_lieu(taches, rs, n, graine=0):
+    """
+    Rend l'ensemble des indices de taches sur lesquelles le verdict de lieu
+    de base sera AUSSI joue sur l'espace entier (controle negatif).
+
+    POURQUOI UN ECHANTILLON, ET POURQUOI CIBLE
+    ------------------------------------------
+    Le controle coute un second passage complet du module. Le jouer sur
+    chaque ligne doublerait le poste ; ne le jouer nulle part rendrait le
+    branchement invisible a son propre defaut -- un filtre qui eliminerait
+    des deux cotes serait indiscernable d'un filtre qui discrimine.
+
+    Le tirage est CIBLE sur les deux strates traitees, et c'est la raison
+    d'etre de cette fonction : un tirage uniforme sur les ~3 700 taches
+    tomberait presque toujours sur une strate sans module, et rendrait un
+    echantillon de controles VIDES -- exactement le §5.25, ou un controle
+    tire au mauvais niveau validait un repli entierement faux. La strate se
+    lit sur les charges, sans aucun calcul.
+
+    Le tirage est deterministe (graine fixe) : deux lancements de la meme
+    commande controlent les memes taches, sinon la reprise changerait
+    l'echantillon en cours de route.
+    """
+    if n <= 0:
+        return set()
+    eligibles = []
+    for k, (i_rep, _membres) in enumerate(taches):
+        r = rs[i_rep]
+        b, c = r.get('b_charges'), r.get('c_charges')
+        if not isinstance(b, list) or not isinstance(c, list):
+            continue
+        if (len(c), len(b) - len(c)) in STRATES_LIEU_DE_BASE:
+            eligibles.append(k)
+    if not eligibles:
+        return set()
+    if len(eligibles) <= n:
+        return set(eligibles)
+    rng = np.random.RandomState(graine)
+    return {eligibles[t] for t in
+            rng.choice(len(eligibles), size=n, replace=False)}
+
+
 
 # ======================================================================
 # Parallelisme : un LOT = (tache, tranche de realisations de symetrie)
@@ -591,7 +842,11 @@ def _travail(item):
     worker qui meurt en silence ferait disparaitre un candidat sans laisser
     de trace -- le defaut du §5.23, sous une autre forme.
     """
-    id_lot, cicy, b, c, groupes, idx_sym, premier = item
+    # Le 8e champ est OPTIONNEL a la lecture : un checkpoint ou un test
+    # ecrit avant l'echantillon de controle du lieu de base continue de se
+    # relire. Il ne participe a aucune identite de lot.
+    id_lot, cicy, b, c, groupes, idx_sym, premier = item[:7]
+    controle_lieu = bool(item[7]) if len(item) > 7 else False
     try:
         e = _CTX['entries'].get(cicy)
         num_b = _CTX['inv'].get(cicy)
@@ -615,7 +870,8 @@ def _travail(item):
                             if premier else [])
         syms = [_CTX['SYM'][num_b]['symetries'][i] for i in idx_sym]
         return id_lot, analyser(cicy, amb, cfg, b, c, syms,
-                                groupes=set(groupes) if groupes else None)
+                                groupes=set(groupes) if groupes else None,
+                                controle_lieu=controle_lieu)
     except Exception as exc:
         return id_lot, [{'groupe': '-',
                          'etat': f'erreur worker ({type(exc).__name__}: {exc})'}]
@@ -701,6 +957,18 @@ def main():
                          "recopie. Sans ce controle le repli serait une "
                          "hypothese invisible -- exactement le mecanisme du "
                          "§5.23. 0 = desactiver.")
+    ap.add_argument('--controle-lieu-de-base', type=int, default=20,
+                    help="Rejouer le verdict de lieu de base sur l'espace "
+                         "ENTIER pour N taches des deux strates traitees, "
+                         "et mesurer le contraste. Sans lui, un branchement "
+                         "qui eliminerait aussi le generique -- donc un "
+                         "`return True` deguise -- serait indiscernable "
+                         "d'un branchement qui discrimine (§5.37, §5.38). "
+                         "N'entre PAS dans l'empreinte du checkpoint : il "
+                         "ne change aucun verdict, il en mesure un a cote, "
+                         "et le faire entrer ferait EFFACER le JSONL pour "
+                         "un changement de taille d'echantillon. "
+                         "0 = desactiver, et le bilan le dira.")
     args = ap.parse_args()
 
     entries = {e['num']: e for e in load_oxford_file(args.cicylist)}
@@ -730,7 +998,7 @@ def main():
         _empreinte(src, (args.cicy, bool(args.replier_orbites),
                          int(args.controle_orbites))))
     depart = 0
-    survivants = indetermines = ecartes = 0
+    survivants = indetermines = ecartes = non_fibres = 0
 
     if args.reset:
         for p in (dst, prog.chemin):
@@ -744,6 +1012,10 @@ def main():
             survivants = prog.compteurs['survivants']
             indetermines = prog.compteurs['indetermines']
             ecartes = prog.compteurs['ecartes']
+            # `.get` : un checkpoint ecrit avant le branchement du lieu de
+            # base n'a pas ce compteur. Il ne doit pas faire echouer la
+            # reprise -- il doit repartir de zero et se voir.
+            non_fibres = prog.compteurs.get('non_fibres', 0)
             # FILTRAGE plutot que troncature : avec plusieurs workers les
             # lots ne finissent pas dans l'ordre, donc « tout ce qui est
             # avant l'offset est valide » est faux. Chaque ligne porte son
@@ -961,7 +1233,35 @@ def main():
     # ---------------- lots, pool, ecriture ---------------------------
     interrompu = False
     controles = _echantillon_controle(taches, args.controle_orbites)
+    controles_lieu = _echantillon_lieu(taches, rs, args.controle_lieu_de_base)
     n_controles = n_discordances = 0
+
+    # REGLE DES FILTRES, exigence 1 : le branchement du lieu de base rapporte
+    # ce qu'il ecarte ET ce qu'il laisse passer, motif par motif. Un compteur
+    # a une seule case ferait lire un branchement jamais appele comme un
+    # branchement qui ne trouve rien.
+    bilan_lieu = Counter()
+    contraste_lieu = Counter()
+
+    def _compter_lieu(L):
+        """Range une ligne selon ce que le branchement en a fait."""
+        lb = L.get('lieu_de_base')
+        if not isinstance(lb, dict):
+            return
+        rc, rv = (lb.get('strate') or [None, None])[:2]
+        cle = f"rank_C={rc}, rang_V={rv} : {lb.get('motif')}"
+        bilan_lieu['ELIMINE -- ' + cle if lb.get('elimine')
+                   else 'indetermine -- ' + cle] += 1
+        if lb.get('generique') is not None:
+            g = lb['generique']
+            if lb.get('elimine') and not g.get('elimine'):
+                contraste_lieu['contraste OK (equivariant elimine, '
+                               'generique non)'] += 1
+            elif lb.get('elimine') and g.get('elimine'):
+                contraste_lieu['SANS CONTRASTE : les deux cotes eliminent'] += 1
+            else:
+                contraste_lieu[f"aucune elimination des deux cotes "
+                               f"({lb.get('motif')})"] += 1
 
     def _cle_verdict(x):
         # Ce qui doit coincider sur une orbite : le verdict, pas les
@@ -978,9 +1278,17 @@ def main():
             if isinstance(v, (list, tuple)):
                 return tuple(_norm(u) for u in v)
             return v
+        # `fibre` entre dans la cle. Deux membres d'une meme orbite doivent
+        # s'accorder non seulement sur « survit » mais sur « ce n'est pas un
+        # fibre » : sans cela, un desaccord d'orbite portant precisement sur
+        # le lieu de base passerait inapercu, et le repli redeviendrait une
+        # hypothese invisible sur la moitie neuve du verdict (§5.23, §5.25).
+        # C'est le VERDICT qui entre, pas la mesure : le temoin (x, y, z) et
+        # le nombre F.Y sont PERMUTES par l'automorphisme et differeraient
+        # legitimement, comme le degre temoin de la surjectivite.
         return (str(x.get('groupe')), str(_norm(x.get('lambda'))),
                 bool(x.get('survit')), str(x.get('etat')),
-                str(x.get('n_gen_quotient')))
+                str(x.get('n_gen_quotient')), str(x.get('fibre')))
 
     # --- construction des lots ---------------------------------------
     # Un lot = ('T', tache, rang de la tranche) pour un representant,
@@ -1002,7 +1310,7 @@ def main():
             # ligne quand meme -- un fichier doit dire pourquoi un cas n'a
             # pas ete traite.
             lots.append((('T', k, -1), r['cicy'], r['b_charges'],
-                         r['c_charges'], None, None, True))
+                         r['c_charges'], None, None, True, False))
             continue
         idx = [n for n, sy in enumerate(SYM[num_b]['symetries'])
                if (not g) or sy['nom'] in g]
@@ -1036,15 +1344,17 @@ def main():
         n_totales_par_tache[k] = n_total_real
         tranches = [idx[t:t + args.taille_lot]
                     for t in range(0, len(idx), args.taille_lot)] or [[]]
+        cl = k in controles_lieu
         for t, tr in enumerate(tranches):
             lots.append((('T', k, t), r['cicy'], r['b_charges'],
-                         r['c_charges'], sorted(g) if g else None, tr, t == 0))
+                         r['c_charges'], sorted(g) if g else None, tr,
+                         t == 0, cl))
         for j in controles.get(k, ()):
             rj = rs[j]
             for t, tr in enumerate(tranches):
                 lots.append((('C', k, j, t), rj['cicy'], rj['b_charges'],
                              rj['c_charges'], sorted(g) if g else None,
-                             tr, t == 0))
+                             tr, t == 0, cl))
 
     # `('T', k)` sans rang de tranche = tache entiere d'un checkpoint
     # sequentiel migre : tous ses lots sont consideres faits.
@@ -1076,7 +1386,7 @@ def main():
 
     def _ecrire(fh, id_lot, lignes):
         """Ecrit les lignes d'un lot, repliquees sur les membres. Rend leur nombre."""
-        nonlocal survivants, indetermines, ecartes
+        nonlocal survivants, indetermines, ecartes, non_fibres
         n_ecrites = 0
         k = id_lot[1]
         i_rep, membres = taches[k]
@@ -1086,6 +1396,12 @@ def main():
             else:
                 survivants += bool(L.get('survit')) * len(membres)
                 indetermines += bool(L.get('indetermine')) * len(membres)
+                non_fibres += (L.get('fibre') is False) * len(membres)
+                # Compte sur le REPRESENTANT, une fois : le bilan mesure ce
+                # que le branchement a decide, pas combien de membres ont
+                # recu le verdict recopie -- ceux-la sont dans `non_fibres`.
+                if id_lot[0] == 'T':
+                    _compter_lieu(L)
                 L['n_gen_quotient'] = n_gen_quotient(
                     rs[i_rep].get('cohomology'), L.get('groupe'))
         for j in membres:
@@ -1136,8 +1452,19 @@ def main():
             elif L.get('hoppe_complet') is None and L.get('indetermine') \
                     and L.get('surjectif_certifie') is None:
                 v = "indetermine : Hoppe complet non calculable"
+            elif L.get('fibre') is False:
+                # Ce n'est PAS une attente : c'est une elimination. Le mot
+                # « indetermine » a recouvert ce cas jusqu'au §5.37, et
+                # l'affichage doit les distinguer comme le fichier le fait.
+                lb = L.get('lieu_de_base') or {}
+                v = (f"ECARTE : V = ker f n'est pas un fibre "
+                     f"({lb.get('motif')}, F.Y = "
+                     f"{(lb.get('mesure') or {}).get('F_Y')})")
             elif L.get('surjectif_certifie') is False:
-                v = "indetermine : surjectivite de f non certifiee"
+                lb = L.get('lieu_de_base') or {}
+                v = ("indetermine : surjectivite de f non certifiee"
+                     + (f" ; lieu de base : {lb.get('motif')}"
+                        if lb.get('motif') else ""))
             elif L.get('indetermine'):
                 v = "indetermine (w2V non calculable)"
             elif L['h0_generique'] != 0:
@@ -1219,7 +1546,8 @@ def main():
                 prog.faits[id_lot] = n_lignes_ecrites
                 prog.sauver({'survivants': survivants,
                              'indetermines': indetermines,
-                             'ecartes': ecartes})
+                             'ecartes': ecartes,
+                             'non_fibres': non_fibres})
                 n_faits += 1
                 if n_faits % 25 == 0:
                     ec = time.time() - t0
@@ -1284,9 +1612,41 @@ def main():
         elif not n_controles:
             print(f"    /!\\ AUCUN controle effectue : le repli n'est pas "
                   f"verifie sur ce lot (--controle-orbites 0 ?).")
+    # ---- le branchement du lieu de base, les deux cotes ----------------
+    # REGLE DES FILTRES : ce bloc s'affiche MEME quand il n'a rien elimine,
+    # et surtout quand il n'a jamais ete appele. Un filtre muet dont on ne
+    # dit rien se lit comme un filtre qui n'a rien trouve.
+    print(f"\n{'-' * 96}")
+    print(f"  LIEU DE BASE (§5.37, §5.38) -- ce que le branchement a decide,"
+          f" et ce qu'il a laisse")
+    print(f"{'-' * 96}")
+    if not bilan_lieu:
+        print(f"    AUCUNE ligne n'a atteint le branchement : soit aucun "
+              f"certificat de surjectivite n'a echoue,")
+        print(f"    soit ce lot ne contient aucune des deux strates. Ce "
+              f"n'est PAS un resultat d'absence.")
+    for cle, v in sorted(bilan_lieu.items(), key=lambda x: -x[1]):
+        print(f"    {v:>7}  {cle}")
+    print(f"\n    Controle negatif (espace entier) : echantillon de "
+          f"{len(controles_lieu)} tache(s) "
+          f"(--controle-lieu-de-base {args.controle_lieu_de_base})")
+    if not controles_lieu:
+        print(f"      /!\\ AUCUN controle : rien ne distingue ici un "
+              f"branchement qui discrimine")
+        print(f"          d'un branchement qui eliminerait des deux cotes.")
+    for cle, v in sorted(contraste_lieu.items(), key=lambda x: -x[1]):
+        marque = '  /!\\' if 'SANS CONTRASTE' in cle else ''
+        print(f"      {v:>5}  {cle}{marque}")
+    if any('SANS CONTRASTE' in k for k in contraste_lieu):
+        print(f"      /!\\ Le generique elimine AUSSI : le verdict ne tient "
+              f"pas a l'equivariance. A instruire avant de s'en servir.")
+    print(f"{'-' * 96}")
+
     print(f"\n  Couples (candidat, lambda) qui survivent   : {survivants}")
     print(f"  Indetermines (un test non calculable)     : {indetermines}"
           f"   <- ni retenus ni elimines")
+    print(f"  Non fibres (lieu de base demontre sur Y)  : {non_fibres}"
+          f"   <- ELIMINES, pas en attente (§5.37, §5.38)")
     print(f"  Ecartes avant evaluation                  : {ecartes}"
           f"   <- hors domaine, charges non permutees, etc.")
     print(f"  Toutes ces lignes sont dans le JSONL, champ 'etat'.")

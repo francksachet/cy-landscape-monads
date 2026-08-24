@@ -8,6 +8,71 @@
 > levé, la partition en « six contraints » mesurait la portée de l'ancien test et
 > non une propriété des candidats, et la suite compte 47 tests.
 
+
+---
+
+## Clôture — ce que ce dépôt a établi, et où il s'arrête
+
+**Ce projet est clos au tag `v1-monades`.** Ce qui suit reste vrai et
+utilisable ; ce qui n'a pas été fait est nommé plus bas, pas sous-entendu.
+
+### Ce qu'il a établi
+
+Un **catalogue audité** de monades sur des CICYs à quotient libre : 505 601
+lignes de verdict, une seule version du code, couverture complète du domaine,
+et chaque ligne portant ce qui la décide. **Deux candidats entièrement
+vérifiés** — `#6890` et `#6947` —, SO(10) avec ℤ₂, trois générations, stabilité
+démontrée sous équivariance.
+
+Et **neuf défauts**, dont deux avaient produit un chiffre publiable qui
+n'existait pas. **Aucun n'a été trouvé par le code** : tous par une référence
+extérieure — Riemann-Roch, la dualité de Serre, une valeur connue d'avance, la
+définition d'une réduction. C'est le §8, et c'est le résultat le plus
+transportable de ce dépôt.
+
+### Ce qu'il a fermé, et par quoi
+
+**Le Modèle Standard est hors de portée de ce domaine, et pour une raison de
+principe** : une ligne de Wilson préserve le rang, SO(10) est de rang 5, le
+Modèle Standard de rang 4 (§5.8). Les deux candidats plafonnent à Pati-Salam ou
+SU(5) *flipped*. Aucun calcul supplémentaire ne franchira cela.
+
+La seule route qui pourrait le franchir — un Γ d'ordre ≥ 4, donc une ligne de
+Wilson qui casse davantage — est **fermée et mesurée** : 574 couples, 544 tués
+par h⁰(V) équivariant, 28 sans f équivariant, **0 survivant** (§6). Et la route
+ℤ₄ a perdu `#7745` (§5.36).
+
+### Ce qu'il n'a pas exploré, et pourquoi
+
+Trois choses, nommées — une absence qui n'est pas un résultat d'absence :
+
+1. **Les extensions au rang 5.** Jamais engendrées : 1,1·10⁸ tuples à m = 3, au-
+   dessus de tout plafond d'énumération. C'est le §5.23 sous une autre forme —
+   une famille non engendrée ne se distingue d'une famille absente par aucune
+   trace dans le fichier de sortie. **C'est le seul endroit où quelque chose
+   d'inattendu peut encore vivre dans ce domaine.**
+2. **Le bloc `corr`** (§5.32), qui décide de `#6947` : sa charge `c₁ + b₄` donne
+   `dim(S/I) = 84` contre `χ = 76`, et les 8 unités manquantes sont exactement
+   les classes de Čech à construire (§5.36).
+3. **La strate `rank_C = 1 / rang_V = 4`** — 686 lignes λ, 34 693 dans le
+   fichier. Sa forme est mesurée et favorable, mais `f` y a cinq composantes et
+   non quatre : le décompte de dimensions est à refaire, pas à recopier (§5.39).
+
+### La suite, ailleurs
+
+La route qui atteint le Modèle Standard n'est pas une monade de rang 5, c'est
+une **somme de fibrés en droites** de groupe de structure `S(U(1)⁵) ⊂ SU(5)` :
+SU(5) est de rang 4, donc la ligne de Wilson y conserve le rang. Et la
+cohomologie y est exacte — Koszul et Bott-Borel-Weil sur le produit de P^n —,
+ce qui fait disparaître la moitié des difficultés recensées ici : h^i non
+certifiés, critère de Hoppe seulement suffisant, surjectivité au rang 5,
+réserve mod p. C'est un autre socle mathématique, donc un autre dépôt.
+
+Ce qui s'y transporte : les données (`cicylist.txt`, `cicyquotients.m`), le
+filtre d'indice `|χ| = 3|Γ|`, l'annulation d'anomalie, l'infrastructure de
+balayage — et le §8, **à écrire avant le premier scan et non après le premier
+défaut.**
+
 ---
 
 ## 0. Où reprendre — point d'entrée
@@ -57,17 +122,41 @@ gros que celui que le §5.37 a tranché. Voir §5.39.
 | `comparaison_w5_w6.json` | la comparaison qui clôt le §5.39 : **152 SURVIT gagnés, 0 perdu** | oui |
 | `scan_wilson6/results_equivariance_f.jsonl` | **le balayage qui fait foi** — 505 601 lignes, porte les verdicts des §5.36 à §5.38 (§5.39) | **non** |
 
-**Le seul fichier que git ne protège pas est celui qui fait foi.** Le
-`.gitignore` écarte `scan_*/`, ce qui était juste tant qu'un scan n'était qu'une
-sortie reproductible : ici, `scan_wilson5` a coûté plusieurs heures et le §5.35
-a établi qu'un balayage refait n'est pas garanti identique — c'est tout son
-propos. Le supprimer ou l'écraser est donc irréversible en pratique. À décider :
-le suivre explicitement (`git add -f`), ou l'archiver hors dépôt. En attendant,
-**ne jamais passer `--reset` sur `scan_wilson5`, et ne pas nettoyer les
-`scan_*` sans l'exclure nommément.** `run_propre.ps1` porte désormais deux
-gardes qui refusent d'écrire dans le dossier source ou dans `scan_wilson5` —
+**Les deux fichiers qui font foi ne sont pas dans git — ils sont archivés.**
+Le `.gitignore` écarte `scan_*/`, ce qui était juste tant qu'un scan n'était
+qu'une sortie reproductible. Ici, `scan_wilson6` a coûté une douzaine d'heures
+et le §5.35 a établi qu'un balayage refait n'est **pas garanti identique** —
+c'est tout son propos. Et 446 Mo de JSONL n'ont rien à faire dans un dépôt git,
+qui n'est pas fait pour ça.
+
+La question, ouverte depuis le §5.35, est donc tranchée : **archivés hors
+dépôt, avec leur empreinte dans ce document.**
+
+```
+..\CY_Landscape_archives\scan_wilson5.zip
+  sha256  4C1D3C563CC49EF57C416D566CE48752FA925802F53011026591F9F91DB70C9D
+..\CY_Landscape_archives\scan_wilson6.zip
+  sha256  250A52A9A507CA2E6FE6E1F5A08A5533D9221197EF15C45E82EA4800F97B88E9
+```
+
+Pour vérifier qu'une archive est bien celle que ce document décrit :
+
+```powershell
+Get-FileHash ..\CY_Landscape_archives\scan_wilson6.zip -Algorithm SHA256
+```
+
+**Pourquoi l'empreinte et pas seulement l'archive.** Une archive posée sur un
+disque est un fichier qui *prétend* être le bon. Dans six mois, rien ne
+distinguerait `scan_wilson6.zip` d'une copie tronquée, d'une version antérieure
+renommée, ou du zip de `scan_wilson5`. C'est exactement le défaut du §5.35 — un
+fichier qui ne porte pas de quoi dire ce qu'il est — appliqué cette fois à
+l'archive plutôt qu'aux lignes. L'empreinte est ce qui distingue *archiver* de
+*ranger*.
+
+**Ne jamais passer `--reset` sur `scan_wilson5` ni `scan_wilson6`, et ne pas
+nettoyer les `scan_*` sans les exclure nommément.** `run_propre.ps1` porte deux
+gardes qui refusent d'écrire dans le dossier source ou dans `scan_wilson5` ;
 elles ne remplacent pas la prudence, elles rattrapent la faute de frappe.
-La même remarque vaut maintenant pour `scan_wilson6`, qui coûte le même prix.
 
 Les autres `scan_*`, `output_*`, `test_*` et les `*.log` sont, eux, de vraies
 sorties jetables — environ 600 Mo dont le dépôt n'a pas besoin.

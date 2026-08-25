@@ -1,0 +1,21 @@
+DOCUMENTATION AND PRODUCED DATA — CC BY 4.0
+
+The following are licensed under the Creative Commons Attribution 4.0
+International licence (CC BY 4.0):
+
+  CY_Landscape_Explorer_PROJET.md   the working record
+  CY_Landscape_POUR_COMPRENDRE.md
+  README.md
+  all *.json and *.jsonl files produced by this repository
+  the two sweep archives (scan_wilson5.zip, scan_wilson6.zip), deposited
+    separately
+
+Full text: https://creativecommons.org/licenses/by/4.0/legalcode
+
+You are free to share and adapt this material for any purpose, including
+commercially, provided you give appropriate credit, link to the licence, and
+indicate if changes were made.
+
+Source code is under the MIT licence; see LICENSE.
+Third-party data (cicylist.txt, cicyquotients.m) keep their own terms; see
+the note at the end of LICENSE.

@@ -4,3 +4,10 @@ scan_*/
 test_*/
 output_*/
 *.log
+*.pdf
+
+# retires du suivi le 25/08/2026 -- presents en local, hors du depot public
+0911.1569v1.pdf
+audit_results.cmd
+cy_landscape.cmd
+Note.txt

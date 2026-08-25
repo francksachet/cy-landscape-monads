@@ -1,2 +1,0 @@
-@echo off
-call C:\Users\Franck\miniconda3\Scripts\activate.bat C:\Users\Franck\miniconda3 && cd /d "C:\Users\Franck\Desktop\Vide Poche\CY_Landscape" && conda activate gpu_env && python -m cy_landscape.main_optimized cicylist.txt --max-ps 6 -j 7

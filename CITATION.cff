@@ -10,7 +10,7 @@ type: software
 authors:
   - given-names: Franck
     family-names: Sachet
-    orcid: 'https://orcid.org/0009-0000-0409-0742'   # <-- REMPLACER par le vrai ORCID
+    orcid: 'https://orcid.org/0009-0000-0409-0742'
 repository-code: 'https://github.com/francksachet/cy-landscape-monads'
 abstract: >-
   A systematic scan of two-term monad bundles over complete

@@ -181,6 +181,7 @@ scan_wilson6.zip  sha256  250A52A9A507CA2E6FE6E1F5A08A5533D9221197EF15C45E82EA48
 
 `scan_wilson6` is the file of record; `scan_wilson5` is kept as the comparison
 base that established that **152 survivors were gained and none lost**.
+Deposited at [https://doi.org/10.5281/zenodo.22099905](https://doi.org/10.5281/zenodo.22099905).
 
 ## Successor
 

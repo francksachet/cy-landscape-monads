@@ -133,9 +133,9 @@ La question, ouverte depuis le §5.35, est donc tranchée : **archivés hors
 dépôt, avec leur empreinte dans ce document.**
 
 ```
-..\CY_Landscape_archives\scan_wilson5.zip
+https://zenodo.org/records/22099905/files/scan_wilson5.zip?download=1
   sha256  4C1D3C563CC49EF57C416D566CE48752FA925802F53011026591F9F91DB70C9D
-..\CY_Landscape_archives\scan_wilson6.zip
+https://zenodo.org/records/22099905/files/scan_wilson6.zip?download=1
   sha256  250A52A9A507CA2E6FE6E1F5A08A5533D9221197EF15C45E82EA4800F97B88E9
 ```
 

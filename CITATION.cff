@@ -10,7 +10,7 @@ type: software
 authors:
   - given-names: Franck
     family-names: Sachet
-    orcid: 'https://doi.org/10.5281/zenodo.22095895'
+    orcid: 'https://orcid.org/0009-0000-0409-0742'   # <-- REMPLACER par le vrai ORCID
 repository-code: 'https://github.com/francksachet/cy-landscape-monads'
 abstract: >-
   A systematic scan of two-term monad bundles over complete
@@ -40,6 +40,7 @@ keywords:
   - computational reproducibility
 license: MIT
 version: v1-monades
+doi: 10.5281/zenodo.22095895
 date-released: '2026-08-24'
 references:
   - type: article

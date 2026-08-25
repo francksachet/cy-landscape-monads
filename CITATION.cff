@@ -1,0 +1,76 @@
+cff-version: 1.2.0
+title: >-
+  Equivariant monad bundles on CICY free quotients — a
+  defect-audited scan
+message: >-
+  If you use this work, please cite it using the metadata
+  below. Prefer the concept DOI, which always resolves to
+  the latest version.
+type: software
+authors:
+  - given-names: Franck
+    family-names: Sachet
+    orcid: 'https://doi.org/10.5281/zenodo.22095895'
+repository-code: 'https://github.com/francksachet/cy-landscape-monads'
+abstract: >-
+  A systematic scan of two-term monad bundles over complete
+  intersection Calabi-Yau threefolds admitting a free
+  quotient, aimed at three-generation heterotic models. The
+  scan covers 194 CICYs with |chi| = 3|Gamma|, 14943
+  candidate identities and 505601 verdict lines, computed in
+  a single state of the code. Two candidates are fully
+  verified, both SO(10) with Z2, three generations; both are
+  semi-positive and therefore lie outside the 7118 positive
+  monads of arXiv:0911.1569. A limitation of principle
+  closes the line: a Wilson line preserves the rank of the
+  gauge group, SO(10) has rank 5 and the Standard Model rank
+  4. All verdicts are computed mod p with the reserve stated
+  explicitly, and the work has had no independent
+  verification. Nine implementation defects found during the
+  work, none of them by the code itself, are documented
+  together with the discipline that caught them.
+keywords:
+  - heterotic string
+  - Calabi-Yau
+  - monad bundles
+  - complete intersection Calabi-Yau
+  - free quotients
+  - Wilson lines
+  - string phenomenology
+  - computational reproducibility
+license: MIT
+version: v1-monades
+date-released: '2026-08-24'
+references:
+  - type: article
+    title: >-
+      Exploring positive monad bundles and a new heterotic
+      standard model
+    authors:
+      - family-names: Anderson
+        given-names: Lara B.
+      - family-names: Gray
+        given-names: James
+      - family-names: He
+        given-names: Yang-Hui
+      - family-names: Lukas
+        given-names: Andre
+    journal: JHEP
+    year: 2010
+    volume: '02'
+    start: 54
+    identifiers:
+      - type: other
+        value: 'arXiv:0911.1569'
+  - type: article
+    title: >-
+      On free quotients of complete intersection Calabi-Yau
+      manifolds
+    authors:
+      - family-names: Braun
+        given-names: Volker
+    journal: JHEP
+    year: 2011
+    identifiers:
+      - type: other
+        value: 'arXiv:1003.3235'
